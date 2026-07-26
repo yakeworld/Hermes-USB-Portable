@@ -345,6 +345,12 @@ Keep your agent up-to-date with the latest improvements from Nous Research:
 
 ## 📝 Credits & Attribution
 
-*   **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** — Powerful Agentic core created by [Nous Research](https://github.com/NousResearch).
-*   **[python-build-standalone](https://github.com/indygreg/python-build-standalone)** — Portable Python interpreter compilation.
-*   **[uv](https://github.com/astral-sh/uv)** — Blazing fast package installer and resolver.
+*   **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** — Agentic core by [Nous Research](https://github.com/NousResearch)
+*   **[Synthos](https://github.com/yakeworld/Synthos)** — Cognitive engine with 156 skills for automated research
+*   **[opencode-openai](https://github.com/yakeworld/opencode-openai)** — Local AI proxy (OpenCode Zen → OpenAI API)
+*   **[OpenCode](https://opencode.ai)** — AI coding platform providing free model tier
+*   **[jabkit-rs](https://github.com/yakeworld/jabkit-rs)** — Multi-source academic literature search (25 providers)
+*   **[doi-fetch](https://github.com/yakeworld/doi-fetch)** — PDF download with 4-tier cascade fallback
+*   **[rproxy](https://github.com/yakeworld/rproxy)** — HTTP/SOCKS5 proxy rotation
+*   **[python-build-standalone](https://github.com/indygreg/python-build-standalone)** — Portable Python interpreter
+*   **[uv](https://github.com/astral-sh/uv)** — Fast Python package installer and resolver

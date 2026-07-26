@@ -156,7 +156,11 @@ ANTHROPIC_API_KEY=sk-...
 ## 📝 致谢
 
 *   **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** — Nous Research 的 AI Agent 核心
-*   **[Synthos](https://github.com/yakeworld/Synthos)** — 自主进化学术科研平台
-*   **[opencode-openai](https://github.com/yakeworld/opencode-openai)** — 本地 AI 代理
-*   **[python-build-standalone](https://github.com/indygreg/python-build-standalone)** — 便携 Python
-*   **[uv](https://github.com/astral-sh/uv)** — 快速包管理
+*   **[Synthos](https://github.com/yakeworld/Synthos)** — 自主进化学术科研平台（156 技能）
+*   **[opencode-openai](https://github.com/yakeworld/opencode-openai)** — 本地 AI 代理（OpenCode Zen → OpenAI API）
+*   **[OpenCode](https://opencode.ai)** — AI 编程平台，提供免费模型
+*   **[jabkit-rs](https://github.com/yakeworld/jabkit-rs)** — 多源学术文献检索（25 数据源）
+*   **[doi-fetch](https://github.com/yakeworld/doi-fetch)** — PDF 下载（4 级级联降级）
+*   **[rproxy](https://github.com/yakeworld/rproxy)** — 代理轮换工具
+*   **[python-build-standalone](https://github.com/indygreg/python-build-standalone)** — 便携 Python 解释器
+*   **[uv](https://github.com/astral-sh/uv)** — 快速 Python 包管理
