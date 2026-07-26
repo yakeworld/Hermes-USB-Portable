@@ -147,6 +147,17 @@ OPENCODE_EXE="$TOOLS_DIR/opencode-openai"
 SYNTHOS_SKILLS="$PORTABLE_ROOT/Synthos/skills"
 SYNTHOS_CONFIG_TAG="###SYNTHOS_SKILLS_CONFIG###"
 
+# ---------------------------------------------------------------------------
+# Synthos auto-download (if not present)
+# ---------------------------------------------------------------------------
+if [ ! -f "$PORTABLE_ROOT/Synthos/SKILL.md" ]; then
+    echo ""
+    echo "============================================"
+    echo "    Synthos Cognitive Engine"
+    echo "============================================"
+    bash "$PORTABLE_ROOT/scripts/download-synthos.sh" "$PORTABLE_ROOT/Synthos"
+fi
+
 # Prevent Node/npm from writing to host home directory
 export HOME="$PORTABLE_ROOT/.cache/unix-home"
 mkdir -p "$HOME"

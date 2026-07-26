@@ -6,13 +6,12 @@ src/
 *.flag
 *.log
 
-# Synthos runtime caches
-Synthos/.evolution/
-Synthos/.codegraph/
-Synthos/.skill_cache/
-Synthos/.tmp/
-Synthos/.opencode/
-Synthos/outputs/
-Synthos/literature/
-Synthos/docker/
-Synthos/node_modules/
+# Synthos - cloned from GitHub on first run
+Synthos/
+
+# Tool binaries - downloaded via download-tools.ps1 on first run
+tools/windows-x64/*.exe
+tools/linux-x64/*
+tools/macos-arm64/*
+!tools/linux-x64/download-tools.sh
+!tools/windows-x64/download-tools.ps1

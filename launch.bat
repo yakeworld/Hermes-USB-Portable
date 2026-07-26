@@ -40,6 +40,17 @@ if not exist "%RUNTIME_DIR%\ready.flag" (
 )
 
 REM ---------------------------------------------------------------------------
+REM Synthos auto-download (if not present)
+REM ---------------------------------------------------------------------------
+if not exist "%PORTABLE_ROOT%\Synthos\SKILL.md" (
+    echo.
+    echo ============================================
+    echo    Synthos Cognitive Engine
+    echo ============================================
+    call "%PORTABLE_ROOT%\scripts\download-synthos.bat" "%PORTABLE_ROOT%\Synthos"
+)
+
+REM ---------------------------------------------------------------------------
 REM Environment isolation - keep everything inside the portable folder
 REM ---------------------------------------------------------------------------
 set "VIRTUAL_ENV=%RUNTIME_DIR%\venv"

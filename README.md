@@ -93,11 +93,17 @@ The launcher dashboard shows:
 
 ## 🧬 Synthos Cognitive Engine
 
-[Hermes-USB-Portable](https://github.com/yakeworld/Hermes-USB-Portable) bundles a full Synthos cognitive engine as Hermes external skills. 156 skills covering automated research, literature search, paper writing, knowledge extraction, quality gates, and more.
+Hermes Portable automatically downloads [Synthos](https://github.com/yakeworld/Synthos) on first launch — a complete cognitive engine with 156 skills for automated research, literature search, paper writing, and quality gates.
 
 ### How it works
 
-On first launch, the launcher automatically injects Synthos skills path into `data/config.yaml`:
+On first run, the launcher clones Synthos from GitHub:
+
+```
+git clone --depth 1 https://github.com/yakeworld/Synthos.git
+```
+
+Then auto-injects the skills path into `data/config.yaml`:
 
 ```yaml
 skills:
@@ -170,19 +176,13 @@ hermes-portable/
 │   └── skills/                # Learned custom skills
 |── src/                       # Downloaded Hermes Agent source code
 │   └── hermes-agent/
-├── tools/                      # Portable utility binaries
+|── tools/                      # Portable utility binaries (downloaded on first run)
 │   ├── windows-x64/            # Windows x64 binaries
-│   │   ├── opencode-openai.exe  # Local AI proxy (free models, no API key needed)
-│   │   ├── jabkit.exe           # Academic literature search
-│   │   ├── doi-fetch.exe        # PDF download
-│   │   ├── rproxy.exe           # Proxy rotation
 │   │   └── download-tools.ps1   # First-run download script
 │   ├── linux-x64/              # Linux x64 binaries
-│   │   ├── opencode-openai
-│   │   ├── jabkit
-│   │   ├── doi-fetch
-│   │   └── rproxy
+│   │   └── download-tools.sh
 │   └── README.md               # Tools documentation
+├── Synthos/                    # [Auto-downloaded] Cognitive engine from github.com/yakeworld/Synthos
 └── .cache/                    # Sandbox cache & binaries
     └── runtimes/              # Platform-specific portable interpreters
         ├── windows-x64/
