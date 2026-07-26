@@ -315,15 +315,25 @@ echo.
 exit /b
 
 :menu_local_ai
+echo.
 if "!LOCAL_AI_STATUS!"=="Running" (
+    echo %CYAN%Stopping Local AI ...%RESET%
+    echo [STOP] stopping opencode-openai > "%PORTABLE_ROOT%\local-ai-debug.log"
     powershell -ExecutionPolicy Bypass -File "%PORTABLE_ROOT%\scripts\local-ai-manager.ps1" -Action stop
     echo.
     echo %BRIGHT_GREEN%Local AI stopped.%RESET%
 ) else (
-    echo.
     echo %CYAN%Starting Local AI ...%RESET%
-    powershell -ExecutionPolicy Bypass -File "%PORTABLE_ROOT%\scripts\local-ai-manager.ps1" -Action start -ToolsDir "%TOOLS_DIR%" -ConfigPath "%HERMES_HOME%\config.yaml"
+    echo [START] %DATE% %TIME% > "%PORTABLE_ROOT%\local-ai-debug.log"
+    echo PORTABLE_ROOT=%PORTABLE_ROOT% >> "%PORTABLE_ROOT%\local-ai-debug.log"
+    echo TOOLS_DIR=%TOOLS_DIR% >> "%PORTABLE_ROOT%\local-ai-debug.log"
+    echo OPENCODE_EXE=%OPENCODE_EXE% >> "%PORTABLE_ROOT%\local-ai-debug.log"
+    dir "%OPENCODE_EXE%" >> "%PORTABLE_ROOT%\local-ai-debug.log" 2>&1
+    echo [POWERSHELL] calling local-ai-manager.ps1 >> "%PORTABLE_ROOT%\local-ai-debug.log"
+    powershell -ExecutionPolicy Bypass -File "%PORTABLE_ROOT%\scripts\local-ai-manager.ps1" -Action start -ToolsDir "%TOOLS_DIR%" -ConfigPath "%HERMES_HOME%\config.yaml" >> "%PORTABLE_ROOT%\local-ai-debug.log" 2>&1
+    echo [EXIT] PowerShell exit code: !ERRORLEVEL! >> "%PORTABLE_ROOT%\local-ai-debug.log"
 )
+echo [GOTO] detect_status >> "%PORTABLE_ROOT%\local-ai-debug.log"
 goto :detect_status
 
 :menu_download_tools
