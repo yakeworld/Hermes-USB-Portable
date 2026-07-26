@@ -12,6 +12,10 @@ Synthos/
 # Tool binaries - downloaded via download-tools.ps1 on first run
 tools/windows-x64/*.exe
 tools/linux-x64/*
+tools/linux-x64/*
+tools/macos-x64/*
 tools/macos-arm64/*
 !tools/linux-x64/download-tools.sh
 !tools/windows-x64/download-tools.ps1
+!tools/macos-x64/download-tools.sh
+!tools/macos-arm64/download-tools.sh

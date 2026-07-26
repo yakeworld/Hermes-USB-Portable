@@ -32,3 +32,8 @@ curl http://127.0.0.1:8787/v1/chat/completions \
 ```
 
 No API key needed with `--api-key public` — uses free models automatically.
+
+## macOS
+
+macOS x64 and ARM64 download scripts are in `tools/macos-x64/` and `tools/macos-arm64/`.
+Binaries for these platforms will be available once the CI release workflow runs (push a tag `v*` to any tool repo).
