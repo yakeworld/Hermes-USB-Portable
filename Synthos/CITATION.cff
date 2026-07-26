@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use Synthos in your research, please cite this software."
+title: "Synthos: A Self-Evolving Cognitive Operating System for AI-Augmented Scientific Research"
+authors:
+  - family-names: Yang
+    given-names: Xiaokai
+    affiliation: "Department of Neurology, Wenzhou People's Hospital, Wenzhou 325000, China"
+    email: yakeworld@outlook.com
+    orcid: "0000-0002-8189-2017"
+version: "v2.43.2"
+date-released: "2026-06-21"
+url: "https://github.com/yakeworld/Synthos"
+license: MIT
+repository-code: "https://github.com/yakeworld/Synthos"
+keywords:
+  - "cognitive architecture"
+  - "self-evolution"
+  - "scientific AI agent"
+  - "constitutional AI"
+  - "skill-driven architecture"
+  - "epistemological computing"

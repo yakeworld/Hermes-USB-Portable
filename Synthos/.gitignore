@@ -1,0 +1,12 @@
+# Synthos - gitignore for portable distribution
+# Exclude runtime caches and large artifacts
+.evolution/
+.codegraph/
+.skill_cache/
+.tmp/
+.opencode/
+outputs/
+literature/
+docker/
+node_modules/
+package-lock.json

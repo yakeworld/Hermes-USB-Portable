@@ -87,8 +87,40 @@ curl http://127.0.0.1:8787/v1/chat/completions \
 The launcher dashboard shows:
 - **Local AI** status line — shows `[OK] Running` when active
 - **Tools** status line — shows `[OK] Ready` when binaries are downloaded
+- **Synthos** — automatically configured on first launch (skills loaded from `Synthos/skills/`)
 - Menu option **`[6] Start/Stop Local AI`** — toggles the server
 - Menu option **`[7] Download Tools`** — downloads missing binaries
+
+## 🧬 Synthos Cognitive Engine
+
+[Hermes-USB-Portable](https://github.com/yakeworld/Hermes-USB-Portable) bundles a full Synthos cognitive engine as Hermes external skills. 156 skills covering automated research, literature search, paper writing, knowledge extraction, quality gates, and more.
+
+### How it works
+
+On first launch, the launcher automatically injects Synthos skills path into `data/config.yaml`:
+
+```yaml
+skills:
+  external_dirs:
+    - <absolute-path>/Synthos/skills
+```
+
+This makes all 156 Synthos skills available as Hermes `skill_view()` / `skill_manage()` commands inside your Hermes session.
+
+### Key Synthos skills included
+
+| Skill | Purpose |
+|:------|:--------|
+| `knowledge-acquisition` | Literature search (jabkit-rs) → PDF download (doi-fetch) |
+| `knowledge-extraction` | Extract structured knowledge from papers |
+| `quality-gate` | Paper quality assessment (7-gate pipeline) |
+| `paper-pipeline` | Batch paper processing pipeline |
+| `task-router` | Synthos entry — analyzes queries and dispatches atoms |
+| `gap-analysis` | Research gap identification |
+| `hypothesis-generation` | Generate testable hypotheses from gaps |
+| `reference-enrichment-pipeline` | Complete reference management pipeline |
+
+Use `skill_view(name='<skill-name>')` inside Hermes to load any skill.
 
 ---
 

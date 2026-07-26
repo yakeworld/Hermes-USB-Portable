@@ -5,3 +5,14 @@ data/
 src/
 *.flag
 *.log
+
+# Synthos runtime caches
+Synthos/.evolution/
+Synthos/.codegraph/
+Synthos/.skill_cache/
+Synthos/.tmp/
+Synthos/.opencode/
+Synthos/outputs/
+Synthos/literature/
+Synthos/docker/
+Synthos/node_modules/

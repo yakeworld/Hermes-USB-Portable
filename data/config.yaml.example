@@ -29,3 +29,8 @@ display:
 
 gateway:
   platforms: {}
+
+# Synthos cognitive engine - loaded as Hermes skills
+skills:
+  external_dirs:
+    - ../Synthos/skills

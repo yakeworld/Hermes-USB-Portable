@@ -143,6 +143,10 @@ TOOLS_DIR="$PORTABLE_ROOT/tools/${PLATFORM}-${ARCH}"
 TOOLS_SETUP_FILE="$PORTABLE_ROOT/tools/${PLATFORM}-${ARCH}/download-tools.sh"
 OPENCODE_EXE="$TOOLS_DIR/opencode-openai"
 
+# Synthos
+SYNTHOS_SKILLS="$PORTABLE_ROOT/Synthos/skills"
+SYNTHOS_CONFIG_TAG="###SYNTHOS_SKILLS_CONFIG###"
+
 # Prevent Node/npm from writing to host home directory
 export HOME="$PORTABLE_ROOT/.cache/unix-home"
 mkdir -p "$HOME"
@@ -153,6 +157,23 @@ mkdir -p "$HOME"
 if [ ! -d "$SRC_DIR/hermes-agent" ]; then
     echo "[ERROR] Hermes source not found. Please delete .cache and try again."
     exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Synthos Skill Configuration - inject into config.yaml if not present
+# ---------------------------------------------------------------------------
+if [ -f "$HERMES_HOME/config.yaml" ]; then
+    if ! grep -q "$SYNTHOS_CONFIG_TAG" "$HERMES_HOME/config.yaml" 2>/dev/null; then
+        echo ""
+        echo "  [Synthos] Configuring Synthos skills ..."
+        cat >> "$HERMES_HOME/config.yaml" << EOF
+
+# $SYNTHOS_CONFIG_TAG
+skills:
+  external_dirs:
+    - $SYNTHOS_SKILLS
+EOF
+    fi
 fi
 
 cd "$SRC_DIR/hermes-agent"

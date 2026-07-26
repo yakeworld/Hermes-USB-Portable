@@ -46,6 +46,8 @@ set "VIRTUAL_ENV=%RUNTIME_DIR%\venv"
 set "TOOLS_DIR=%PORTABLE_ROOT%\tools\windows-x64"
 set "TOOLS_SETUP_FILE=%TOOLS_DIR%\download-tools.ps1"
 set "OPENCODE_EXE=%TOOLS_DIR%\opencode-openai.exe"
+set "SYNTHOS_SKILLS=%PORTABLE_ROOT%\Synthos\skills"
+set "SYNTHOS_CONFIG_TAG=###SYNTHOS_SKILLS_CONFIG###"
 set "PATH=%VIRTUAL_ENV%\Scripts;%RUNTIME_DIR%\python;%RUNTIME_DIR%\python\Scripts;%RUNTIME_DIR%\node;%RUNTIME_DIR%\uv;%RUNTIME_DIR%\bin;%PATH%"
 set "PYTHONNOUSERSITE=1"
 set "PYTHONHOME="
@@ -80,6 +82,22 @@ if not exist "%SRC_DIR%\hermes-agent" (
     echo [ERROR] Hermes source not found. Please delete .cache and try again.
     pause
     exit /b 1
+)
+
+REM ---------------------------------------------------------------------------
+REM Synthos Skill Configuration - inject into config.yaml if not present
+REM ---------------------------------------------------------------------------
+if exist "%HERMES_HOME%\config.yaml" (
+    findstr /C:"%SYNTHOS_CONFIG_TAG%" "%HERMES_HOME%\config.yaml" >nul 2>&1
+    if errorlevel 1 (
+        echo.
+        echo  [Synthos] Configuring Synthos skills ...
+        echo.>> "%HERMES_HOME%\config.yaml"
+        echo # %SYNTHOS_CONFIG_TAG% >> "%HERMES_HOME%\config.yaml"
+        echo skills:>> "%HERMES_HOME%\config.yaml"
+        echo   external_dirs:>> "%HERMES_HOME%\config.yaml"
+        echo     - %SYNTHOS_SKILLS%>> "%HERMES_HOME%\config.yaml"
+    )
 )
 
 cd /d "%SRC_DIR%\hermes-agent"

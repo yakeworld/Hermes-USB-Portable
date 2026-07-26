@@ -1,0 +1,742 @@
+#!/usr/bin/env python3
+"""技能质量检查工具 — 检查SKILL.md的完整性、引用有效性、脚本可运行性、思想一致性。
+
+SKILL.md 原理绑定：
+- 维度1: 结构完整性（YAML frontmatter、触发条件、IO契约、边界）
+- 维度2: 引用完整性（references表中所有文件存在）
+- 维度3: 脚本可运行性（py_compile、原理绑定、依赖）
+- 维度4: 思想一致性（脚本声明的原理在SKILL.md中存在，SKILL.md规则有对应实现）
+- 维度5: 内容质量（大小≤30K、无硬编码凭证、版本一致）
+
+用法:
+  python3 check_skill.py <skill_dir_or_SKILL.md_path> [--format json] [--fix]
+  python3 check_skill.py /path/to/SKILL.md
+  python3 check_skill.py /media/yakeworld/sda2/Synthos/skills/  # 全库扫描
+  python3 check_skill.py /home/yakeworld/.hermes/skills/ --format json
+
+输出:
+  默认: Markdown报告
+  --format json: JSON报告
+"""
+
+import os
+import sys
+import json
+import subprocess
+import re
+import argparse
+from pathlib import Path
+from dataclasses import dataclass, field, asdict
+from typing import List, Dict, Optional, Tuple
+from datetime import datetime
+
+
+@dataclass
+class CheckResult:
+    """单个检查点的结果"""
+    name: str
+    passed: bool
+    severity: str  # P0, P1, P2
+    category: str  # 维度1-5
+    details: str = ""
+    suggestion: str = ""
+
+
+@dataclass
+class SkillReport:
+    """单个技能的质量报告"""
+    name: str
+    path: str
+    score: int
+    status: str  # healthy, good, acceptable, unhealthy
+    checks: List[CheckResult] = field(default_factory=list)
+    suggestions: List[str] = field(default_factory=list)
+
+    @property
+    def p0_passed(self):
+        return all(c.passed for c in self.checks if c.severity == 'P0')
+
+    @property
+    def p1_passed(self):
+        return all(c.passed for c in self.checks if c.severity == 'P1')
+
+
+def load_skill_md(skill_path: str) -> Tuple[str, Optional[dict]]:
+    """加载SKILL.md，返回content和frontmatter（如果有）"""
+    if not os.path.exists(skill_path):
+        return None, None
+
+    if os.path.isdir(skill_path):
+        skill_md_path = os.path.join(skill_path, 'SKILL.md')
+        if not os.path.exists(skill_md_path):
+            return None, None
+    else:
+        skill_md_path = skill_path
+
+    with open(skill_md_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Parse YAML frontmatter (simple parse)
+    frontmatter = None
+    if content.startswith('---'):
+        end = content.find('---', 3)
+        if end > 0:
+            fm_text = content[3:end].strip()
+            frontmatter = parse_simple_yaml(fm_text)
+
+    return content, frontmatter
+
+
+def parse_simple_yaml(text: str) -> dict:
+    """简易YAML解析（仅支持简单键值对）"""
+    result = {}
+    for line in text.split('\n'):
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if ': ' in line:
+            key, value = line.split(': ', 1)
+            key = key.strip()
+            value = value.strip()
+            # Remove quotes
+            if value.startswith('"') and value.endswith('"'):
+                value = value[1:-1]
+            elif value.startswith("'") and value.endswith("'"):
+                value = value[1:-1]
+            result[key] = value
+    return result
+
+
+def check_structure(content: str, frontmatter: Optional[dict], skill_path: str) -> List[CheckResult]:
+    """检查结构完整性（维度1）"""
+    results = []
+
+    # 1.1 SKILL.md存在且≥500字符
+    exists = os.path.exists(skill_path)
+    size = os.path.getsize(skill_path) if exists else 0
+    results.append(CheckResult(
+        name="SKILL.md存在且自洽",
+        passed=exists and len(content) >= 500,
+        severity="P0",
+        category="维度1-结构完整性",
+        details=f"文件存在, {len(content)}字符 ({len(content)//1024}KB)",
+        suggestion="" if (exists and len(content) >= 500) else "SKILL.md文件缺失或过少内容"
+    ))
+
+    # 1.2 YAML frontmatter完整
+    has_name = frontmatter and 'name' in frontmatter
+    has_desc = frontmatter and 'description' in frontmatter
+    has_version = frontmatter and 'version' in frontmatter
+    # synthos field is not always present — check broader
+    has_synthos = 'metadata' in str(frontmatter) or 'synthos' in str(frontmatter) or 'author' in str(frontmatter) or 'license' in str(frontmatter)
+    # Allow minimal frontmatter: just name + description
+    minimal_valid = has_name and has_desc
+    results.append(CheckResult(
+        name="YAML frontmatter完整",
+        passed=minimal_valid,  # name + description is sufficient
+        severity="P0",
+        category="维度1-结构完整性",
+        details=f"name:{bool(has_name)} description:{bool(has_desc)} version:{bool(has_version)} synthos:{bool(has_synthos)}",
+        suggestion="补充frontmatter中的缺失字段" if not minimal_valid else ""
+    ))
+
+    # 1.3 触发条件明确
+    has_trigger = '触发条件' in content or 'when' in content.lower() or 'When to use' in content
+    results.append(CheckResult(
+        name="触发条件明确",
+        passed=has_trigger,
+        severity="P1",
+        category="维度1-结构完整性",
+        details=f"{'包含' if has_trigger else '缺少'}触发条件章节",
+        suggestion="添加'触发条件'章节，说明何时加载本技能" if not has_trigger else ""
+    ))
+
+    # 1.4 IO_CONTRACT存在
+    has_io = 'IO_CONTRACT' in content or '输入' in content or 'output' in content.lower()
+    results.append(CheckResult(
+        name="输入输出规范存在",
+        passed=has_io,
+        severity="P1",
+        category="维度1-结构完整性",
+        details=f"{'包含' if has_io else '缺少'}IO契约",
+        suggestion="添加IO_CONTRACT章节" if not has_io else ""
+    ))
+
+    # 1.5 出口契约明确
+    has_output = '出口契约' in content or 'fig.savefig' in content or 'output' in content.lower()
+    results.append(CheckResult(
+        name="出口契约明确",
+        passed=has_output,
+        severity="P1",
+        category="维度1-结构完整性",
+        details=f"{'包含' if has_output else '缺少'}出口契约",
+        suggestion="明确输出物格式和路径" if not has_output else ""
+    ))
+
+    # 1.6 边界定义清晰
+    has_boundary = '边界' in content or '不加载' in content or 'NOT' in content or 'avoid' in content.lower()
+    results.append(CheckResult(
+        name="边界定义清晰",
+        passed=has_boundary,
+        severity="P2",
+        category="维度1-结构完整性",
+        details=f"{'包含' if has_boundary else '缺少'}边界定义",
+        suggestion="添加'不加载'和'不做什么'的说明" if not has_boundary else ""
+    ))
+
+    return results
+
+
+def check_references(content: str, skill_dir: str) -> List[CheckResult]:
+    """检查引用完整性（维度2）"""
+    results = []
+
+    # Parse references and scripts — extract file paths from SKILL.md
+    # Handle multiple formats:
+    # 1. Table rows: | path/to/file.md | description |
+    # 2. Backtick: `path/to/file.md`
+    # 3. Plain: references/path or scripts/path
+    ref_patterns = [
+        r'\|\s*([a-zA-Z0-9_./-]+\.(md|py|json|yaml|yml|csv|excalidraw))\s*\|',  # table pipe
+        r'`([a-zA-Z0-9_./-]+\.(md|py|json|yaml|yml|csv|excalidraw))`',  # backtick
+        r'(?<!`)(?:references|scripts)/[a-zA-Z0-9_./-]+\.(md|py|json|yaml|yml|csv|excalidraw)(?!`)',  # plain
+    ]
+
+    all_refs = set()
+    for pattern in ref_patterns:
+        matches = re.findall(pattern, content)
+        # If tuple (from capture groups), use first group
+        for m in matches:
+            ref = m if isinstance(m, str) else m[0]
+            # Normalize: remove trailing slash, check if file exists
+            ref = ref.rstrip('/')
+            # Skip directory-only references (like "references/" with no file after)
+            if '/' not in ref[0:30] or ref.count('/') == 0:
+                # This is a relative segment, skip
+                continue
+            all_refs.add(ref)
+
+    broken = []
+    total = 0
+    for ref in all_refs:
+        total += 1
+        full = os.path.join(skill_dir, ref)
+        if not os.path.exists(full):
+            broken.append(ref)
+
+    # Deduplicate broken for display
+    broken_unique = list(dict.fromkeys(broken))
+
+    results.append(CheckResult(
+        name=f"引用文件存在（{total}个唯一引用，{len(broken_unique)}个Broken）",
+        passed=len(broken_unique) == 0,
+        severity="P0",
+        category="维度2-引用完整性",
+        details=f"引用{total}个，Broken {len(broken_unique)}个: {', '.join(broken_unique[:5])}",
+        suggestion=f"移除broken引用或创建缺失文件: {', '.join(broken_unique[:3])}" if broken_unique else ""
+    ))
+
+    # 2.2 无孤立引用（SKILL.md中引用的markdown文件存在）
+    md_refs = set()
+    for pattern in ref_patterns:
+        matches = re.findall(pattern, content)
+        for m in matches:
+            ref = m if isinstance(m, str) else m[0]
+            if ref.endswith('.md'):
+                md_refs.add(ref)
+
+    broken_md = [r for r in md_refs if not os.path.exists(os.path.join(skill_dir, r))]
+    results.append(CheckResult(
+        name=f"Markdown引用完整（{len(md_refs)}个）",
+        passed=len(broken_md) == 0,
+        severity="P0",
+        category="维度2-引用完整性",
+        details=f"Markdown引用{len(md_refs)}个，Broken {len(broken_md)}个",
+        suggestion="检查markdown引用路径" if broken_md else ""
+    ))
+
+    return results
+
+
+def check_scripts(skill_dir: str) -> List[CheckResult]:
+    """检查脚本可运行性（维度3）"""
+    results = []
+    scripts_dir = os.path.join(skill_dir, 'scripts')
+    references_scripts = None
+
+    for root, dirs, files in os.walk(skill_dir, followlinks=False):
+        for f in files:
+            if f.endswith('.py') and not f.endswith('.pyc') and not f.startswith('.'):
+                scripts_dir = root
+
+    # Find all Python scripts
+    all_py = []
+    for root, dirs, files in os.walk(skill_dir, followlinks=False):
+        for f in files:
+            if f.endswith('.py') and not f.endswith('.pyc') and not f.startswith('.'):
+                all_py.append(os.path.join(root, f))
+
+    if not all_py:
+        results.append(CheckResult(
+            name="无可执行脚本",
+            passed=True,  # 有些技能没有脚本
+            severity="P2",
+            category="维度3-脚本可运行性",
+            details="无.py文件"
+        ))
+        return results
+
+    # 3.1 语法正确
+    syntax_errors = []
+    for py in all_py:
+        result = subprocess.run(['python3', '-m', 'py_compile', py], capture_output=True, text=True)
+        if result.returncode != 0:
+            syntax_errors.append(os.path.relpath(py, skill_dir))
+
+    results.append(CheckResult(
+        name=f"Python语法正确（{len(all_py)}个文件）",
+        passed=len(syntax_errors) == 0,
+        severity="P0",
+        category="维度3-脚本可运行性",
+        details=f"全部{len(all_py)}个文件编译通过" if not syntax_errors else f"失败: {', '.join(syntax_errors)}",
+        suggestion=f"修复语法错误: {', '.join(syntax_errors)}" if syntax_errors else ""
+    ))
+
+    # 3.2 有可执行入口
+    no_main = []
+    for py in all_py:
+        with open(py) as f:
+            content = f.read(500)
+        has_main = 'if __name__' in content or 'Usage:' in content or '用法' in content
+        if not has_main:
+            no_main.append(os.path.relpath(py, skill_dir))
+
+    results.append(CheckResult(
+        name="脚本有可执行入口",
+        passed=len(no_main) == 0,
+        severity="P1",
+        category="维度3-脚本可运行性",
+        details=f"{len(all_py) - len(no_main)}/{len(all_py)}有入口" if no_main else f"全部{len(all_py)}个有入口",
+        suggestion=f"添加可执行入口: {', '.join(no_main)}" if no_main else ""
+    ))
+
+    # 3.3 有原理绑定
+    no_binding = []
+    for py in all_py:
+        with open(py) as f:
+            content = f.read(500)
+        has_binding = 'SKILL.md 原理绑定' in content or 'SKILL.md' in content
+        if not has_binding:
+            no_binding.append(os.path.relpath(py, skill_dir))
+
+    results.append(CheckResult(
+        name="脚本有SKILL.md原理绑定",
+        passed=len(no_binding) == 0,
+        severity="P0",
+        category="维度3-脚本可运行性",
+        details=f"{len(all_py) - len(no_binding)}/{len(all_py)}有绑定" if no_binding else f"全部{len(all_py)}个有绑定",
+        suggestion=f"添加原理绑定: {', '.join(no_binding)}" if no_binding else ""
+    ))
+
+    # 3.5 路径解析正确（简单检查）
+    path_issues = []
+    for py in all_py:
+        with open(py) as f:
+            content = f.read()
+        # Check for relative paths without os.path.dirname
+        if '../' in content or '/..' in content:
+            if 'os.path.dirname' not in content and 'SCRIPT_DIR' not in content:
+                path_issues.append(os.path.relpath(py, skill_dir))
+
+    results.append(CheckResult(
+        name="路径解析逻辑正确",
+        passed=len(path_issues) == 0,
+        severity="P1",
+        category="维度3-脚本可运行性",
+        details=f"全部路径解析正确" if not path_issues else f"路径问题: {', '.join(path_issues)}",
+        suggestion=f"使用绝对路径: {', '.join(path_issues)}" if path_issues else ""
+    ))
+
+    return results
+
+
+def check_consistency(content: str, skill_dir: str) -> List[CheckResult]:
+    """检查思想一致性（维度4）"""
+    results = []
+
+    # 4.1 所有脚本声明的原理在SKILL.md中存在
+    all_py = []
+    for root, dirs, files in os.walk(skill_dir, followlinks=False):
+        for f in files:
+            if f.endswith('.py') and not f.endswith('.pyc') and not f.startswith('.'):
+                all_py.append(os.path.join(root, f))
+
+    if all_py:
+        missing_principles = []
+        for py in all_py:
+            with open(py) as f:
+                py_content = f.read(500)
+            if 'SKILL.md 原理绑定' in py_content:
+                # Extract principle references from the script header
+                for line in py_content.split('\n'):
+                    if '铁律' in line or '设计规则' in line:
+                        # Check if this principle exists in SKILL.md
+                        principle_text = line.split(':', 1)[-1].strip().rstrip('。')
+                        if principle_text not in content:
+                            missing_principles.append(os.path.relpath(py, skill_dir))
+                            break
+
+        results.append(CheckResult(
+            name="脚本声明的原理在SKILL.md中存在",
+            passed=len(missing_principles) == 0,
+            severity="P0",
+            category="维度4-思想一致性",
+            details=f"全部{len(all_py)}个脚本原理可追溯" if not missing_principles else f"缺失原理: {', '.join(missing_principles)}",
+            suggestion="在SKILL.md中补充缺失的规则" if missing_principles else ""
+        ))
+
+    # 4.2 SKILL.md中的铁律有对应实现
+    iron_rules = re.findall(r'铁律[^。]*。', content)
+    if iron_rules:
+        # Check if at least one script implements these rules
+        has_implementations = any(
+            '铁律' in open(os.path.join(root, f)).read(500)
+            for root, _, files in os.walk(skill_dir, followlinks=False)
+            for f in files
+            if f.endswith('.py')
+        )
+        results.append(CheckResult(
+            name="铁律有对应实现",
+            passed=has_implementations,
+            severity="P0",
+            category="维度4-思想一致性",
+            details=f"{len(iron_rules)}条铁律，{'有实现' if has_implementations else '无实现'}",
+            suggestion="添加实现脚本或移除铁律" if not has_implementations else ""
+        ))
+
+    # 4.3 模式映射正确
+    # Count patterns — support "模式A:", "模式A（xxx）", "模式A: xxx" formats
+    patterns_found = len(re.findall(r'模式[A-Z]', content))
+    # Deduplicate: only count lines that are actual mode definitions, not mentions
+    # Mode definitions appear as section headers or tree nodes
+    mode_lines = re.findall(r'(?:模式[A-Z][（:;]\s+|├──模式[A-Z]:|└──模式[A-Z]:)', content)
+    patterns_found = len(mode_lines)
+    results.append(CheckResult(
+        name=f"模式定义完整（{patterns_found}个模式）",
+        passed=patterns_found >= 2,  # 至少2个模式
+        severity="P1",
+        category="维度4-思想一致性",
+        details=f"{patterns_found}个模式定义",
+        suggestion="补充模式定义" if patterns_found < 2 else ""
+    ))
+
+    # 4.4 无冗余代码（同目录下无完全重复的.py文件）
+    duplicates = []
+    for root, dirs, files in os.walk(skill_dir, followlinks=False):
+        md5s = {}
+        for f in files:
+            if f.endswith('.py'):
+                fp = os.path.join(root, f)
+                result = subprocess.run(['md5sum', fp], capture_output=True, text=True)
+                md5 = result.stdout.split()[0]
+                if md5 in md5s:
+                    duplicates.append(f"{os.path.relpath(fp, skill_dir)} == {md5s[md5]}")
+                else:
+                    md5s[md5] = os.path.relpath(fp, skill_dir)
+
+    results.append(CheckResult(
+        name="无冗余代码",
+        passed=len(duplicates) == 0,
+        severity="P2",
+        category="维度4-思想一致性",
+        details=f"全部{sum(1 for r,d,fs in os.walk(skill_dir, followlinks=False) for f in fs if f.endswith('.py'))}个.py文件无重复" if not duplicates else f"重复: {', '.join(duplicates[:3])}",
+        suggestion="移除重复脚本" if duplicates else ""
+    ))
+
+    return results
+
+
+def check_quality(content: str, frontmatter: Optional[dict], skill_dir: str) -> List[CheckResult]:
+    """检查内容质量（维度5）"""
+    results = []
+
+    # 5.1 SKILL.md ≤ 30K字符
+    size = len(content)
+    results.append(CheckResult(
+        name=f"SKILL.md大小合理（{size//1024}KB）",
+        passed=size <= 30000,
+        severity="P2",
+        category="维度5-内容质量",
+        details=f"{size}字符 (限制30000)",
+        suggestion="将示例代码移至references/" if size > 30000 else ""
+    ))
+
+    # 5.2 无硬编码凭证
+    tokens_to_check = ['chat_id', 'token', 'api_key', 'secret', 'password']
+    hardcoded = []
+    for token in tokens_to_check:
+        # Check if token appears in a code block (which is OK)
+        in_code_block = False
+        for line in content.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('```') or stripped.startswith('    '):
+                continue
+            # Check if it's just a mention/description (not an assignment)
+            if token in content.lower():
+                # Skip if it's in a description context
+                context = content[content.lower().index(token):content.lower().index(token)+100]
+                if '在.env' in context or '变量' in context or 'placeholder' in context:
+                    continue
+                if '例如' in context or '示例' in context or '说明' in context:
+                    continue
+                if 'chat_id' in context.lower() and '开头' in context:
+                    continue
+                if 'token' in context.lower() and '环境变量' in context:
+                    continue
+                hardcoded.append(token)
+                break
+
+    has_hardcoded = len(hardcoded) > 0
+    results.append(CheckResult(
+        name="无硬编码凭证",
+        passed=not has_hardcoded,
+        severity="P0",
+        category="维度5-内容质量",
+        details=f"{'安全' if not has_hardcoded else '发现硬编码: ' + ', '.join(hardcoded)}",
+        suggestion="将凭证移入.env" if has_hardcoded else ""
+    ))
+
+    # 5.3 版本一致
+    if frontmatter:
+        version = frontmatter.get('version', '')
+        changelog_path = os.path.join(skill_dir, 'CHANGE_LOG.md')
+        if os.path.exists(changelog_path):
+            with open(changelog_path) as f:
+                cl_content = f.read()
+            # Extract version from changelog
+            cl_match = re.search(r'v?(\d+\.\d+(?:\.\d+)?)', cl_content)
+            cl_version = cl_match.group(1) if cl_match else ''
+            version_match = re.search(r'version[:\s]+(\d+\.\d+(?:\.\d+)?)', frontmatter.get('version', ''))
+            fm_version = version_match.group(1) if version_match else ''
+
+            results.append(CheckResult(
+                name="版本一致",
+                passed=version == cl_version or fm_version == cl_version or version == '' or cl_version == '',
+                severity="P1",
+                category="维度5-内容质量",
+                details=f"frontmatter: {version}, CHANGE_LOG: {cl_version}",
+                suggestion="同步版本号" if (version and cl_version and version != cl_version) else ""
+            ))
+        else:
+            results.append(CheckResult(
+                name="CHANGE_LOG.md存在",
+                passed=False,
+                severity="P2",
+                category="维度5-内容质量",
+                details="CHANGE_LOG.md不存在"
+            ))
+    else:
+        results.append(CheckResult(
+            name="CHANGE_LOG.md存在",
+            passed=False,
+            severity="P2",
+            category="维度5-内容质量",
+            details="无法检查版本（无frontmatter）"
+        ))
+
+    # 5.5 有实战案例
+    has_case_study = 'case-study' in content.lower() or '实战' in content or '案例' in content
+    results.append(CheckResult(
+        name="有实战案例",
+        passed=has_case_study,
+        severity="P2",
+        category="维度5-内容质量",
+        details=f"{'包含' if has_case_study else '缺少'}实战案例"
+    ))
+
+    return results
+
+
+def calculate_score(results: List[CheckResult]) -> int:
+    """计算总分"""
+    score = 0
+
+    p0_results = [r for r in results if r.severity == 'P0']
+    p1_results = [r for r in results if r.severity == 'P1']
+    p2_results = [r for r in results if r.severity == 'P2']
+
+    # P0: 一票否决，每个10分，共100分上限
+    p0_score = sum(10 for r in p0_results if r.passed)
+
+    # P1: 每个5分，最多20分
+    p1_score = min(20, sum(5 for r in p1_results if r.passed))
+
+    # P2: 每个2分，最多10分
+    p2_score = min(10, sum(2 for r in p2_results if r.passed))
+
+    score = min(100, p0_score + p1_score + p2_score)
+
+    # P0一票否决
+    if not all(r.passed for r in p0_results):
+        score = min(score, 59)  # 有P0问题则<60
+
+    return score
+
+
+def get_status(score: int) -> str:
+    """根据分数获取状态"""
+    if score >= 90:
+        return "healthy"
+    elif score >= 75:
+        return "good"
+    elif score >= 60:
+        return "acceptable"
+    else:
+        return "unhealthy"
+
+
+def generate_report(report: SkillReport, fmt: str = 'markdown') -> str:
+    """生成报告"""
+    if fmt == 'json':
+        return json.dumps(asdict(report), ensure_ascii=False, indent=2)
+
+    # Markdown report
+    lines = []
+    lines.append(f"## 技能质量检查报告")
+    lines.append(f"")
+    lines.append(f"**技能**: {report.name}")
+    lines.append(f"**路径**: {report.path}")
+    lines.append(f"**分数**: {report.score}/100")
+    lines.append(f"**状态**: {'✅ 优秀 (healthy)' if report.status == 'healthy' else '⚠️ 良好' if report.status == 'good' else '❌ 不合格'}")
+    lines.append(f"")
+
+    # Group by severity
+    for severity in ['P0', 'P1', 'P2']:
+        sev_results = [r for r in report.checks if r.severity == severity]
+        if not sev_results:
+            continue
+
+        prefix = '✅' if all(r.passed for r in sev_results) else '❌'
+        lines.append(f"### {prefix} {severity} 问题")
+        lines.append(f"")
+        for r in sev_results:
+            status = '✅' if r.passed else '❌'
+            lines.append(f"- {status} {r.name}: {r.details}")
+            if r.suggestion:
+                lines.append(f"  - 💡 {r.suggestion}")
+        lines.append(f"")
+
+    if report.suggestions:
+        lines.append(f"### 建议")
+        lines.append(f"")
+        for s in report.suggestions:
+            lines.append(f"- {s}")
+        lines.append(f"")
+
+    return '\n'.join(lines)
+
+
+def scan_skill_dir(skill_dir: str, fmt: str = 'markdown', fix: bool = False) -> Optional[SkillReport]:
+    """扫描整个技能目录"""
+    skill_path = None
+
+    # Find SKILL.md (check current dir first, then descend)
+    if os.path.isdir(skill_dir):
+        # Check if the dir itself contains SKILL.md
+        direct = os.path.join(skill_dir, 'SKILL.md')
+        if os.path.exists(direct):
+            skill_path = direct
+        else:
+            # Walk one level deep
+            for root, dirs, files in os.walk(skill_dir, followlinks=False):
+                if 'SKILL.md' in files:
+                    skill_path = os.path.join(root, 'SKILL.md')
+                    skill_dir = root
+                    break
+    elif os.path.isfile(skill_dir):
+        skill_path = skill_dir
+        skill_dir = os.path.dirname(skill_path)
+
+    if not skill_path:
+        print(f"未找到SKILL.md: {skill_dir}", file=sys.stderr)
+        return None
+
+    content, frontmatter = load_skill_md(skill_path)
+    if not content:
+        print(f"无法读取: {skill_path}")
+        return None
+
+    skill_name = frontmatter.get('name', os.path.basename(skill_dir)) if frontmatter else os.path.basename(skill_dir)
+
+    # Run all checks
+    all_checks = []
+    all_checks.extend(check_structure(content, frontmatter, skill_path))
+    all_checks.extend(check_references(content, skill_dir))
+    all_checks.extend(check_scripts(skill_dir))
+    all_checks.extend(check_consistency(content, skill_dir))
+    all_checks.extend(check_quality(content, frontmatter, skill_dir))
+
+    score = calculate_score(all_checks)
+    status = get_status(score)
+
+    suggestions = [c.suggestion for c in all_checks if c.suggestion]
+
+    report = SkillReport(
+        name=skill_name,
+        path=skill_path,
+        score=score,
+        status=status,
+        checks=all_checks,
+        suggestions=suggestions
+    )
+
+    return report
+
+
+def main():
+    parser = argparse.ArgumentParser(description='技能质量检查工具')
+    parser.add_argument('target', help='技能目录或SKILL.md路径，或扫描目录')
+    parser.add_argument('--format', choices=['markdown', 'json'], default='markdown', help='输出格式')
+    parser.add_argument('--fix', action='store_true', help='自动修复P0问题')
+
+    args = parser.parse_args()
+
+    # Check if target is a directory
+    if os.path.isdir(args.target):
+        # Scan all skills in directory
+        skill_md_files = []
+        for root, dirs, files in os.walk(args.target, followlinks=False):
+            if 'SKILL.md' in files:
+                skill_md_files.append(os.path.join(root, 'SKILL.md'))
+
+        if not skill_md_files:
+            print(f"未找到任何SKILL.md: {args.target}")
+            sys.exit(1)
+
+        reports = []
+        for skill_md in sorted(skill_md_files):
+            report = scan_skill_dir(skill_md, args.format, args.fix)
+            if report:
+                reports.append(report)
+
+        if args.format == 'json':
+            print(json.dumps([asdict(r) for r in reports], ensure_ascii=False, indent=2))
+        else:
+            for report in reports:
+                print(generate_report(report))
+                print()
+
+        # Summary
+        healthy = sum(1 for r in reports if r.status == 'healthy')
+        total = len(reports)
+        print(f"=== 扫描完成: {healthy}/{total} 技能健康 ===", file=sys.stderr)
+    else:
+        report = scan_skill_dir(args.target, args.format, args.fix)
+        if report:
+            print(generate_report(report, args.format))
+        else:
+            sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()
