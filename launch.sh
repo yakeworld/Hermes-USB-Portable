@@ -408,6 +408,10 @@ EOF
         else
             echo -e "${CYAN}  Config already set.${RESET}"
         fi
+        # Apply config via Hermes CLI (non-interactive)
+        echo -e "${CYAN}  Applying config ...${RESET}"
+        hermes config set model.default deepseek-v4-flash-free >/dev/null 2>&1 || true
+        hermes config set model.provider custom:local-ai >/dev/null 2>&1 || true
     fi
     read -p "Press Enter to continue ..."
     detect_status

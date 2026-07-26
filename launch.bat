@@ -342,6 +342,10 @@ if "!LOCAL_AI_STATUS!"=="Running" (
     ) else (
         echo %CYAN%  Config already set.%RESET%
     )
+    REM Apply config via Hermes CLI (non-interactive)
+    echo %CYAN%  Applying config ...%RESET%
+    python -c "from hermes_cli.main import main; main()" config set model.default deepseek-v4-flash-free >nul 2>&1
+    python -c "from hermes_cli.main import main; main()" config set model.provider custom:local-ai >nul 2>&1
 )
 goto :detect_status
 
