@@ -19,10 +19,10 @@ download() {
     echo "  OK ($((size/1024/1024)) MB)"
 }
 
-download "opencode-openai" "https://github.com/yakeworld/opencode-openai/releases/download/v0.1.1/opencode-openai"
-download "jabkit"          "https://github.com/yakeworld/jabkit-rs/releases/download/v0.1.0/jabkit-linux-x64"
-download "doi-fetch"       "https://github.com/yakeworld/doi-fetch/releases/download/v0.1.0/doi-fetch-linux-x64"
-download "rproxy"          "https://github.com/yakeworld/rproxy/releases/download/v0.3.0/rproxy-linux-x64"
+download "opencode-openai" "https://github.com/yakeworld/opencode-openai/releases/download/v0.2.0/opencode-openai"
+download "jabkit"          "https://github.com/yakeworld/jabkit-rs/releases/download/v0.1.1/jabkit-linux-x64"
+download "doi-fetch"       "https://github.com/yakeworld/doi-fetch/releases/download/v0.1.1/doi-fetch-linux-x64"
+download "rproxy"          "https://github.com/yakeworld/rproxy/releases/download/v0.3.1/rproxy-linux-x64"
 
 echo ""
 echo "Done. Tools in: $TOOLS_DIR"
