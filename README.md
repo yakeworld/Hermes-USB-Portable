@@ -58,10 +58,10 @@ Hermes Portable includes `opencode-openai`, a local proxy that converts [OpenCod
 ### Quick Start
 
 1. Launch Hermes Portable (`launch.bat` or `launch.sh`)
-2. Select **`[6] Start Local AI`** from the menu
-3. Wait for the server to start (port 8787)
-4. Configure Hermes to use the local provider (select **`[2] Setup`** → custom endpoint → `http://127.0.0.1:8787/v1`)
-5. Select **`[1] Start Hermes Chat`**
+2. First run auto-downloads: runtime (~600MB) → Synthos skills → Tools
+3. Select **`[6] Start Local AI`** from the menu
+4. **Auto-configured** — config.yaml is written automatically with `http://127.0.0.1:8787/v1`
+5. Select **`[1] Start Hermes Chat`** and start prompting
 
 Or directly from the command line:
 ```bash
@@ -166,8 +166,11 @@ hermes-portable/
 ├── launch.bat                 # Windows interactive launcher script
 ├── launch.sh                  # macOS & Linux interactive launcher script
 ├── scripts/
-│   ├── setup-windows.ps1      # Windows first-run configuration script
-│   └── setup-unix.sh          # Unix (macOS/Linux) first-run configuration script
+│   ├── setup-windows.ps1          # Windows first-run configuration script
+│   ├── setup-unix.sh              # Unix (macOS/Linux) first-run configuration script
+│   ├── download-tools.ps1         # Download tool binaries (opencode-openai, jabkit, etc.)
+│   ├── download-synthos.bat       # Download Synthos cognitive engine
+│   └── download-synthos.sh        # Download Synthos (Unix)
 ├── data/                      # ⚠️ [BACKUP THIS] All your private files
 │   ├── config.yaml            # Hermes LLM provider configurations
 │   ├── .env                   # API Keys and active credentials
