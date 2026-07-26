@@ -43,6 +43,9 @@ REM ---------------------------------------------------------------------------
 REM Environment isolation - keep everything inside the portable folder
 REM ---------------------------------------------------------------------------
 set "VIRTUAL_ENV=%RUNTIME_DIR%\venv"
+set "TOOLS_DIR=%PORTABLE_ROOT%\tools\windows-x64"
+set "TOOLS_SETUP_FILE=%TOOLS_DIR%\download-tools.ps1"
+set "OPENCODE_EXE=%TOOLS_DIR%\opencode-openai.exe"
 set "PATH=%VIRTUAL_ENV%\Scripts;%RUNTIME_DIR%\python;%RUNTIME_DIR%\python\Scripts;%RUNTIME_DIR%\node;%RUNTIME_DIR%\uv;%RUNTIME_DIR%\bin;%PATH%"
 set "PYTHONNOUSERSITE=1"
 set "PYTHONHOME="
@@ -173,6 +176,32 @@ if exist "%SRC_DIR%\hermes-agent\hermes_cli\__init__.py" (
 )
 
 REM ---------------------------------------------------------------------------
+REM Local AI Status Detection
+REM ---------------------------------------------------------------------------
+set "LOCAL_AI_STATUS=Stopped"
+set "LOCAL_AI_ICON=[ ]"
+set "LOCAL_AI_COLOR=%GRAY%"
+tasklist /FI "IMAGENAME eq opencode-openai.exe" 2>nul | findstr /I "opencode-openai" >nul
+if not errorlevel 1 (
+    set "LOCAL_AI_STATUS=Running"
+    set "LOCAL_AI_ICON=[OK]"
+    set "LOCAL_AI_COLOR=%BRIGHT_GREEN%"
+) else if exist "%OPENCODE_EXE%" (
+    set "LOCAL_AI_STATUS=Ready"
+    set "LOCAL_AI_ICON=[x]"
+    set "LOCAL_AI_COLOR=%YELLOW%"
+)
+
+set "TOOLS_STATUS=Not downloaded"
+set "TOOLS_ICON=[x]"
+set "TOOLS_COLOR=%YELLOW%"
+if exist "%OPENCODE_EXE%" (
+    set "TOOLS_STATUS=Ready"
+    set "TOOLS_ICON=[OK]"
+    set "TOOLS_COLOR=%BRIGHT_GREEN%"
+)
+
+REM ---------------------------------------------------------------------------
 REM Main Menu
 REM ---------------------------------------------------------------------------
 :show_menu
@@ -187,6 +216,8 @@ echo  %DIM%Setup%RESET%    !SETUP_COLOR!!SETUP_ICON!%RESET% %WHITE%!SETUP_STATUS
 if defined PROVIDER_NAME echo  %DIM%Provider%RESET% %CYAN%!PROVIDER_NAME!%RESET%
 if defined MODEL_NAME echo  %DIM%Model%RESET%    %WHITE%!MODEL_NAME!%RESET%
 echo  %DIM%Gateway%RESET%  !GATEWAY_COLOR!!GATEWAY_ICON!%RESET% %WHITE%!GATEWAY_STATUS!%RESET%
+echo  %DIM%Local AI%RESET% !LOCAL_AI_COLOR!!LOCAL_AI_ICON!%RESET% %WHITE%!LOCAL_AI_STATUS!%RESET%
+echo  %DIM%Tools%RESET%    !TOOLS_COLOR!!TOOLS_ICON!%RESET% %WHITE%!TOOLS_STATUS!%RESET%
 echo  %DIM%Version%RESET%  %GRAY%v!HERMES_VERSION!%RESET%
 echo.
 echo %BRIGHT_CYAN%----------------------------------------------------------------%RESET%
@@ -199,12 +230,20 @@ if "!GATEWAY_STATUS!"=="Running (PID !GATEWAY_PID!)" (
     echo  %BRIGHT_YELLOW%[3]%RESET%  %WHITE%Start Gateway%RESET%
 )
 echo  %BRIGHT_YELLOW%[4]%RESET%  %WHITE%Advanced Options%RESET%  %GRAY%--^>%RESET%
+if "!LOCAL_AI_STATUS!"=="Running" (
+    echo  %BRIGHT_YELLOW%[6]%RESET%  %WHITE%Stop Local AI%RESET%      %RED%[live]%RESET%
+) else (
+    echo  %BRIGHT_YELLOW%[6]%RESET%  %WHITE%Start Local AI%RESET%
+)
+echo  %BRIGHT_YELLOW%[7]%RESET%  %WHITE%Download Tools%RESET%
 echo  %BRIGHT_YELLOW%[5]%RESET%  %GRAY%Exit%RESET%
 echo.
 echo %BRIGHT_CYAN%----------------------------------------------------------------%RESET%
 echo.
 
-echo %BRIGHT_CYAN%Select option:%RESET% & choice /C 12345 /N
+echo %BRIGHT_CYAN%Select option:%RESET% & choice /C 1234567 /N
+if errorlevel 7 goto :menu_download_tools
+if errorlevel 6 goto :menu_local_ai
 if errorlevel 5 goto :menu_exit
 if errorlevel 4 goto :show_advanced
 if errorlevel 3 goto :menu_gateway
@@ -245,6 +284,27 @@ echo.
 echo %GRAY%Goodbye!%RESET%
 echo.
 exit /b
+
+:menu_local_ai
+if "!LOCAL_AI_STATUS!"=="Running" (
+    taskkill /IM "opencode-openai.exe" /F >nul 2>&1
+    echo.
+    echo %BRIGHT_GREEN%Local AI stopped.%RESET%
+) else (
+    echo.
+    echo %CYAN%Starting Local AI ...%RESET%
+    start "opencode-openai" "%OPENCODE_EXE%" --port 8787 --api-key public
+    timeout /t 3 /nobreak >nul
+)
+goto :detect_status
+
+:menu_download_tools
+echo.
+echo %CYAN%Downloading portable tools ...%RESET%
+if not exist "%TOOLS_DIR%" mkdir "%TOOLS_DIR%"
+powershell -ExecutionPolicy Bypass -File "%TOOLS_SETUP_FILE%" -ToolsDir "%TOOLS_DIR%"
+echo.
+goto :detect_status
 
 REM ---------------------------------------------------------------------------
 REM Advanced Menu

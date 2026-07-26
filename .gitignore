@@ -1,5 +1,6 @@
 # Ignore runtime cache and user data
 data/
+!data/config.yaml.example
 .cache/
 src/
 *.flag

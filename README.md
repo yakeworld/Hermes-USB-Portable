@@ -29,7 +29,8 @@
 *    **100% Portable**: Copy the entire directory to a USB flash drive or external SSD. Run it on any Windows, macOS, or Linux computer instantly.
 *    **True Privacy & Isolation**: Your API keys (`data/.env`), conversations (`data/sessions/`), persistent memory, and custom skills are kept strictly within the portable folder.
 *    **Interactive Console Launcher**: Includes a beautiful terminal UI dashboard with state-tracking for setup status, LLM providers, and background gateways.
-*    **Full Hermes Capabilities**: Retains all features of [Nous Research's Hermes Agent](https://github.com/NousResearch/hermes-agent), including memory storage and reusable skill generation.
+*    **Integrated Tools**: Pre-configured `tools/` directory with `opencode-openai` (local AI proxy — no API key needed for free models), `jabkit` (literature search), `doi-fetch` (PDF download), and `rproxy` (proxy rotation).
+*    **Local AI Provider**: Start a local OpenAI-compatible API server from the launcher menu, providing free AI access through OpenCode Zen's free model tier (`deepseek-v4-flash-free`, `big-pickle`).
 
 ---
 
@@ -49,6 +50,45 @@ chmod +x launch.sh
 ```
 
 > 💡 **macOS Double-Click Shortcut:** If you want to double-click in Finder to launch, rename `launch.sh` to `launch.command`. macOS recognizes `.command` files and opens them in Terminal automatically.
+
+## 🧠 Local AI (No API Key Needed)
+
+Hermes Portable includes `opencode-openai`, a local proxy that converts [OpenCode Zen](https://opencode.ai) free API into a standard OpenAI-compatible endpoint. **No API key required** — the `public` key automatically enables free models.
+
+### Quick Start
+
+1. Launch Hermes Portable (`launch.bat` or `launch.sh`)
+2. Select **`[6] Start Local AI`** from the menu
+3. Wait for the server to start (port 8787)
+4. Configure Hermes to use the local provider (select **`[2] Setup`** → custom endpoint → `http://127.0.0.1:8787/v1`)
+5. Select **`[1] Start Hermes Chat`**
+
+Or directly from the command line:
+```bash
+# Start the local AI server
+opencode-openai --port 8787 --api-key public
+
+# Use any OpenAI-compatible client
+curl http://127.0.0.1:8787/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-v4-flash-free","messages":[{"role":"user","content":"Hi"}]}'
+```
+
+### Available Free Models
+
+| Model | Quality | Notes |
+|:------|:--------|:------|
+| `deepseek-v4-flash-free` | ⭐ Best | Recommended default |
+| `big-pickle` | ✅ Good | Stable, general purpose |
+| `gpt-5.4-nano` | ⚠️ | Intermittent |
+
+### Launcher Integration
+
+The launcher dashboard shows:
+- **Local AI** status line — shows `[OK] Running` when active
+- **Tools** status line — shows `[OK] Ready` when binaries are downloaded
+- Menu option **`[6] Start/Stop Local AI`** — toggles the server
+- Menu option **`[7] Download Tools`** — downloads missing binaries
 
 ---
 
@@ -96,8 +136,21 @@ hermes-portable/
 │   ├── sessions/              # Chronological chat histories
 │   ├── memories/              # Persistent memory databases
 │   └── skills/                # Learned custom skills
-├── src/                       # Downloaded Hermes Agent source code
+|── src/                       # Downloaded Hermes Agent source code
 │   └── hermes-agent/
+├── tools/                      # Portable utility binaries
+│   ├── windows-x64/            # Windows x64 binaries
+│   │   ├── opencode-openai.exe  # Local AI proxy (free models, no API key needed)
+│   │   ├── jabkit.exe           # Academic literature search
+│   │   ├── doi-fetch.exe        # PDF download
+│   │   ├── rproxy.exe           # Proxy rotation
+│   │   └── download-tools.ps1   # First-run download script
+│   ├── linux-x64/              # Linux x64 binaries
+│   │   ├── opencode-openai
+│   │   ├── jabkit
+│   │   ├── doi-fetch
+│   │   └── rproxy
+│   └── README.md               # Tools documentation
 └── .cache/                    # Sandbox cache & binaries
     └── runtimes/              # Platform-specific portable interpreters
         ├── windows-x64/

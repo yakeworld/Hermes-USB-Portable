@@ -138,6 +138,11 @@ export PLAYWRIGHT_BROWSERS_PATH="$RUNTIME_DIR/playwright"
 export NODE_PATH="$RUNTIME_DIR/node/lib/node_modules"
 export NPM_CONFIG_PREFIX="$RUNTIME_DIR/node"
 
+# Tools
+TOOLS_DIR="$PORTABLE_ROOT/tools/${PLATFORM}-${ARCH}"
+TOOLS_SETUP_FILE="$PORTABLE_ROOT/tools/${PLATFORM}-${ARCH}/download-tools.sh"
+OPENCODE_EXE="$TOOLS_DIR/opencode-openai"
+
 # Prevent Node/npm from writing to host home directory
 export HOME="$PORTABLE_ROOT/.cache/unix-home"
 mkdir -p "$HOME"
@@ -228,6 +233,28 @@ detect_status() {
     if [ -f "$SRC_DIR/hermes-agent/hermes_cli/__init__.py" ]; then
         HERMES_VERSION=$(grep '__version__' "$SRC_DIR/hermes-agent/hermes_cli/__init__.py" | head -n 1 | sed 's/.*"\(.*\)".*/\1/')
     fi
+
+    # Local AI status
+    LOCAL_AI_STATUS="Stopped"
+    LOCAL_AI_ICON="[ ]"
+    LOCAL_AI_COLOR="$GRAY"
+    TOOLS_STATUS="Not downloaded"
+    TOOLS_ICON="[x]"
+    TOOLS_COLOR="$YELLOW"
+    if [ -f "$OPENCODE_EXE" ]; then
+        TOOLS_STATUS="Ready"
+        TOOLS_ICON="[OK]"
+        TOOLS_COLOR="$BRIGHT_GREEN"
+        if pgrep -f "opencode-openai" >/dev/null 2>&1; then
+            LOCAL_AI_STATUS="Running"
+            LOCAL_AI_ICON="[OK]"
+            LOCAL_AI_COLOR="$BRIGHT_GREEN"
+        else
+            LOCAL_AI_STATUS="Ready"
+            LOCAL_AI_ICON="[x]"
+            LOCAL_AI_COLOR="$YELLOW"
+        fi
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -245,6 +272,8 @@ show_menu() {
     [ -n "$PROVIDER_NAME" ] && echo -e " ${DIM}Provider${RESET} ${CYAN}${PROVIDER_NAME}${RESET}"
     [ -n "$MODEL_NAME" ] && echo -e " ${DIM}Model${RESET}    ${WHITE}${MODEL_NAME}${RESET}"
     echo -e " ${DIM}Gateway${RESET}  ${GATEWAY_COLOR}${GATEWAY_ICON}${RESET} ${WHITE}${GATEWAY_STATUS}${RESET}"
+    echo -e " ${DIM}Local AI${RESET} ${LOCAL_AI_COLOR}${LOCAL_AI_ICON}${RESET} ${WHITE}${LOCAL_AI_STATUS}${RESET}"
+    echo -e " ${DIM}Tools${RESET}    ${TOOLS_COLOR}${TOOLS_ICON}${RESET} ${WHITE}${TOOLS_STATUS}${RESET}"
     echo -e " ${DIM}Version${RESET}  ${GRAY}v${HERMES_VERSION}${RESET}"
     echo ""
     echo -e "${BRIGHT_CYAN}----------------------------------------------------------------${RESET}"
@@ -257,6 +286,12 @@ show_menu() {
         echo -e "  ${BRIGHT_YELLOW}[3]${RESET}  ${WHITE}Start Gateway${RESET}"
     fi
     echo -e "  ${BRIGHT_YELLOW}[4]${RESET}  ${WHITE}Advanced Options${RESET}  ${GRAY}-->${RESET}"
+    if [ "$LOCAL_AI_STATUS" = "Running" ]; then
+        echo -e "  ${BRIGHT_YELLOW}[6]${RESET}  ${WHITE}Stop Local AI${RESET}      ${RED}[live]${RESET}"
+    else
+        echo -e "  ${BRIGHT_YELLOW}[6]${RESET}  ${WHITE}Start Local AI${RESET}"
+    fi
+    echo -e "  ${BRIGHT_YELLOW}[7]${RESET}  ${WHITE}Download Tools${RESET}"
     echo -e "  ${BRIGHT_YELLOW}[5]${RESET}  ${GRAY}Exit${RESET}"
     echo ""
     echo -e "${BRIGHT_CYAN}----------------------------------------------------------------${RESET}"
@@ -269,6 +304,8 @@ show_menu() {
         3) menu_gateway ;;
         4) show_advanced ;;
         5) menu_exit ;;
+        6) menu_local_ai ;;
+        7) menu_download_tools ;;
         *) show_menu ;;
     esac
 }
@@ -308,6 +345,35 @@ menu_exit() {
     echo -e "${GRAY}Goodbye!${RESET}"
     echo ""
     exit 0
+}
+
+menu_local_ai() {
+    if [ "$LOCAL_AI_STATUS" = "Running" ]; then
+        pkill -f "opencode-openai" 2>/dev/null || true
+        echo ""
+        echo -e "${BRIGHT_GREEN}Local AI stopped.${RESET}"
+    else
+        echo ""
+        echo -e "${CYAN}Starting Local AI ...${RESET}"
+        "$OPENCODE_EXE" --port 8787 --api-key public &
+        sleep 3
+    fi
+    read -p "Press Enter to continue ..."
+    detect_status
+    show_menu
+}
+
+menu_download_tools() {
+    echo ""
+    echo -e "${CYAN}Downloading portable tools ...${RESET}"
+    if [ -f "$TOOLS_SETUP_FILE" ]; then
+        bash "$TOOLS_SETUP_FILE"
+    else
+        echo -e "${YELLOW}Setup script not found: $TOOLS_SETUP_FILE${RESET}"
+    fi
+    read -p "Press Enter to continue ..."
+    detect_status
+    show_menu
 }
 
 # ---------------------------------------------------------------------------

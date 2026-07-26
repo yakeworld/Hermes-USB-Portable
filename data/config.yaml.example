@@ -1,0 +1,31 @@
+# Hermes Portable - Example Configuration
+# Copy this file to data/config.yaml and customize.
+
+# Using Local AI (opencode-openai) - starts on port 8787
+model:
+  default: deepseek-v4-flash-free
+  provider: custom:local-ai
+
+providers:
+  local-ai:
+    name: Local AI (opencode-openai - free)
+    base_url: http://127.0.0.1:8787/v1
+    api_mode: chat_completions
+    model: deepseek-v4-flash-free
+    discover_models: true
+
+  # Cloud providers (add your API keys in data/.env)
+  openrouter:
+    name: OpenRouter
+    base_url: https://openrouter.ai/api/v1
+    api_key: ${OPENROUTER_API_KEY}
+    api_mode: chat_completions
+
+agent:
+  max_turns: 150
+
+display:
+  tool_progress: all
+
+gateway:
+  platforms: {}
