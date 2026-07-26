@@ -334,7 +334,7 @@ if "!LOCAL_AI_STATUS!"=="Running" (
         echo   provider: custom:local-ai >> "%HERMES_HOME%\config.yaml"
         echo providers:>> "%HERMES_HOME%\config.yaml"
         echo   local-ai:>> "%HERMES_HOME%\config.yaml"
-        echo     name: Local AI (opencode-openai - free) >> "%HERMES_HOME%\config.yaml"
+        echo     name: Local AI - opencode-openai free tier >> "%HERMES_HOME%\config.yaml"
         echo     base_url: http://127.0.0.1:8787/v1 >> "%HERMES_HOME%\config.yaml"
         echo     api_mode: chat_completions >> "%HERMES_HOME%\config.yaml"
         echo     discover_models: true >> "%HERMES_HOME%\config.yaml"
