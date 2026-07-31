@@ -1,0 +1,15 @@
+# Windows scripts must be CRLF — cmd.exe mis-parses LF-only batch files
+# (known bug: line-pointer shift after goto swallows leading chars, e.g. "setlocal" -> "tlocal")
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Unix scripts must stay LF
+*.sh text eol=lf
+*.py text eol=lf
+
+# Binary assets
+*.png binary
+*.exe binary
+*.zip binary
+*.gz binary
