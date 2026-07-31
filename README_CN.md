@@ -52,7 +52,12 @@
 chmod +x launch.sh && ./launch.sh
 ```
 
-首次运行自动下载：运行时 → Synthos 技能 → 工具二进制。
+首次运行**不强制下载**——按需安装，开箱即出菜单：
+
+| 入口 | 首次下载 | 说明 |
+|:-----|:---------|:-----|
+| **[1] Start OpenCode Chat** | ~200MB | opencode CLI + 科研工具，自动下载，无需 Hermes 运行时 |
+| **[2] Start Hermes Chat** | ~600MB | Hermes 完整运行时（Python/Node），按需触发 |
 
 启动后菜单操作：
 ```
@@ -64,10 +69,11 @@ chmod +x launch.sh && ./launch.sh
 
 ### OpenCode 入口
 
-默认启动项（菜单 [1]，回车直达）。首次启动自动完成：
-1. 拉起本地 AI 代理（免费模型 `deepseek-v4-flash-free`，无需 API Key）
-2. 将 156 个 Synthos 技能链接到 opencode 技能目录（`~/.agents/skills/`，仅便携目录内，不碰宿主）
-3. 生成 `opencode.json`（指向 `127.0.0.1:8787` 本地代理）
+默认启动项（菜单 [1]，回车直达）。**只需 ~200MB**（无需 600MB Hermes 运行时），首次启动自动完成：
+1. 自动下载 opencode CLI + 工具（opencode-openai / jabkit / doi-fetch / rproxy）
+2. 拉起本地 AI 代理（免费模型 `deepseek-v4-flash-free`，无需 API Key）
+3. 将 156 个 Synthos 技能链接到 opencode 技能目录（`~/.agents/skills/`，仅便携目录内，不碰宿主）
+4. 生成 `opencode.json`（指向 `127.0.0.1:8787` 本地代理）
 
 在 OpenCode 对话中直接使用技能：
 ```

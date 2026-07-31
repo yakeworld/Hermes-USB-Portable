@@ -54,12 +54,18 @@ portable_id() {
 }
 
 # ---------------------------------------------------------------------------
-# First-run setup
+# Runtime readiness — Hermes runtime (~600MB) is downloaded ON DEMAND,
+# not at launch. OpenCode entry works without it (Go single binary + npm tgz).
 # ---------------------------------------------------------------------------
-if [ ! -f "$RUNTIME_DIR/ready.flag" ]; then
+HERMES_READY=0
+if [ -f "$RUNTIME_DIR/ready.flag" ]; then
+    HERMES_READY=1
+fi
+
+setup_hermes() {
     echo ""
     echo "============================================"
-    echo "    Hermes Portable - First Run Setup"
+    echo "    Hermes Runtime - First Run Setup"
     echo "============================================"
     echo "  Platform: ${PLATFORM}-${ARCH}"
     echo "  This will download ~600MB of runtime files."
@@ -70,73 +76,77 @@ if [ ! -f "$RUNTIME_DIR/ready.flag" ]; then
     if [ $? -ne 0 ]; then
         echo ""
         echo "[ERROR] Setup failed. Please check your internet connection and try again."
-        exit 1
+        return 1
     fi
-fi
+    HERMES_READY=1
+    return 0
+}
 
 # ---------------------------------------------------------------------------
 # Environment isolation — keep everything inside the portable folder
 # (except the venv, which must live on a local FS to avoid exFAT hardlink
 # limitations — see scripts/setup-unix.sh for details)
+# Only needed for the Hermes entry; OpenCode runs without it.
 # ---------------------------------------------------------------------------
-
-# Read the venv path from the pointer file written during setup.
-if [ -f "$RUNTIME_DIR/venv.path" ]; then
-    VIRTUAL_ENV="$(cat "$RUNTIME_DIR/venv.path")"
-else
-    # Fallback for older setups that put the venv on the drive.
-    VIRTUAL_ENV="$RUNTIME_DIR/venv"
-fi
-
-# If the venv is missing (e.g. after a reboot purged $TMPDIR), rebuild it.
-if [ ! -x "$VIRTUAL_ENV/bin/python" ]; then
-    echo ""
-    echo "[INFO] Local venv not found (temp was likely cleared). Rebuilding ..."
-    echo "       This is fast because packages are cached on the drive."
-    UV_EXE="$RUNTIME_DIR/uv/uv"
-    PYTHON_EXE="$RUNTIME_DIR/python/bin/python3"
-    SRC_DIR="$PORTABLE_ROOT/src"
-
-    if [ "$PLATFORM" = "macos" ]; then
-        LOCAL_BASE="${TMPDIR:-/tmp}"
+setup_hermes_env() {
+    # Read the venv path from the pointer file written during setup.
+    if [ -f "$RUNTIME_DIR/venv.path" ]; then
+        VIRTUAL_ENV="$(cat "$RUNTIME_DIR/venv.path")"
     else
-        LOCAL_BASE="/tmp"
+        # Fallback for older setups that put the venv on the drive.
+        VIRTUAL_ENV="$RUNTIME_DIR/venv"
     fi
 
-    DRIVE_ID="$(portable_id "$RUNTIME_DIR")"
-    VIRTUAL_ENV="${LOCAL_BASE}/hermes-portable-venv-${DRIVE_ID}"
-    export UV_CACHE_DIR="${LOCAL_BASE}/hermes-uv-cache-${DRIVE_ID}"
-    mkdir -p "$UV_CACHE_DIR"
+    # If the venv is missing (e.g. after a reboot purged $TMPDIR), rebuild it.
+    if [ ! -x "$VIRTUAL_ENV/bin/python" ]; then
+        echo ""
+        echo "[INFO] Local venv not found (temp was likely cleared). Rebuilding ..."
+        echo "       This is fast because packages are cached on the drive."
+        UV_EXE="$RUNTIME_DIR/uv/uv"
+        PYTHON_EXE="$RUNTIME_DIR/python/bin/python3"
+        SRC_DIR="$PORTABLE_ROOT/src"
 
-    # Save updated path
-    echo "$VIRTUAL_ENV" > "$RUNTIME_DIR/venv.path"
+        if [ "$PLATFORM" = "macos" ]; then
+            LOCAL_BASE="${TMPDIR:-/tmp}"
+        else
+            LOCAL_BASE="/tmp"
+        fi
 
-    rm -rf "$VIRTUAL_ENV"
-    if ! "$UV_EXE" venv "$VIRTUAL_ENV" --python "$PYTHON_EXE" --seed 2>/dev/null; then
-        "$UV_EXE" venv "$VIRTUAL_ENV" --python "$PYTHON_EXE"
-    fi
-    if ! "$UV_EXE" pip install --python "$VIRTUAL_ENV/bin/python" --link-mode=copy \
-        -e "$SRC_DIR/hermes-agent[all]" \
-        "python-telegram-bot[webhooks]==22.6" 2>/dev/null; then
-        "$VIRTUAL_ENV/bin/python" -m ensurepip --upgrade >/dev/null 2>&1 || true
-        "$VIRTUAL_ENV/bin/python" -m pip install \
+        DRIVE_ID="$(portable_id "$RUNTIME_DIR")"
+        VIRTUAL_ENV="${LOCAL_BASE}/hermes-portable-venv-${DRIVE_ID}"
+        export UV_CACHE_DIR="${LOCAL_BASE}/hermes-uv-cache-${DRIVE_ID}"
+        mkdir -p "$UV_CACHE_DIR"
+
+        # Save updated path
+        echo "$VIRTUAL_ENV" > "$RUNTIME_DIR/venv.path"
+
+        rm -rf "$VIRTUAL_ENV"
+        if ! "$UV_EXE" venv "$VIRTUAL_ENV" --python "$PYTHON_EXE" --seed 2>/dev/null; then
+            "$UV_EXE" venv "$VIRTUAL_ENV" --python "$PYTHON_EXE"
+        fi
+        if ! "$UV_EXE" pip install --python "$VIRTUAL_ENV/bin/python" --link-mode=copy \
             -e "$SRC_DIR/hermes-agent[all]" \
-            "python-telegram-bot[webhooks]==22.6" 2>/dev/null || true
+            "python-telegram-bot[webhooks]==22.6" 2>/dev/null; then
+            "$VIRTUAL_ENV/bin/python" -m ensurepip --upgrade >/dev/null 2>&1 || true
+            "$VIRTUAL_ENV/bin/python" -m pip install \
+                -e "$SRC_DIR/hermes-agent[all]" \
+                "python-telegram-bot[webhooks]==22.6" 2>/dev/null || true
+        fi
+        echo "[OK]    Venv rebuilt."
     fi
-    echo "[OK]    Venv rebuilt."
-fi
 
-export HERMES_HOME="$HERMES_HOME"
-export VIRTUAL_ENV
-export PATH="$TOOLS_DIR:$VIRTUAL_ENV/bin:$RUNTIME_DIR/python/bin:$RUNTIME_DIR/node/bin:$RUNTIME_DIR/uv:$RUNTIME_DIR/bin:$PATH"
-export PYTHONNOUSERSITE=1
-export PYTHONHOME=""
-export PYTHONPATH=""
-export UV_NO_CONFIG=1
-export UV_PYTHON="$RUNTIME_DIR/python/bin/python3"
-export PLAYWRIGHT_BROWSERS_PATH="$RUNTIME_DIR/playwright"
-export NODE_PATH="$RUNTIME_DIR/node/lib/node_modules"
-export NPM_CONFIG_PREFIX="$RUNTIME_DIR/node"
+    export HERMES_HOME="$HERMES_HOME"
+    export VIRTUAL_ENV
+    export PATH="$TOOLS_DIR:$VIRTUAL_ENV/bin:$RUNTIME_DIR/python/bin:$RUNTIME_DIR/node/bin:$RUNTIME_DIR/uv:$RUNTIME_DIR/bin:$PATH"
+    export PYTHONNOUSERSITE=1
+    export PYTHONHOME=""
+    export PYTHONPATH=""
+    export UV_NO_CONFIG=1
+    export UV_PYTHON="$RUNTIME_DIR/python/bin/python3"
+    export PLAYWRIGHT_BROWSERS_PATH="$RUNTIME_DIR/playwright"
+    export NODE_PATH="$RUNTIME_DIR/node/lib/node_modules"
+    export NPM_CONFIG_PREFIX="$RUNTIME_DIR/node"
+}
 
 # Tools
 TOOLS_DIR="$PORTABLE_ROOT/tools/${PLATFORM}-${ARCH}"
@@ -150,54 +160,55 @@ SYNTHOS_SKILLS="$PORTABLE_ROOT/Synthos/skills"
 SYNTHOS_CONFIG_TAG="###SYNTHOS_SKILLS_CONFIG###"
 
 # ---------------------------------------------------------------------------
-# Synthos auto-download (if not present)
+# Synthos clone + config injection (on demand — small, both entries need it)
 # ---------------------------------------------------------------------------
-if [ ! -f "$PORTABLE_ROOT/Synthos/SKILL.md" ]; then
-    echo ""
-    echo "============================================"
-    echo "    Synthos Cognitive Engine"
-    echo "============================================"
-    bash "$PORTABLE_ROOT/scripts/download-synthos.sh" "$PORTABLE_ROOT/Synthos"
-fi
-
-# Prevent Node/npm from writing to host home directory
-export HOME="$PORTABLE_ROOT/.cache/unix-home"
-mkdir -p "$HOME"
-
-# ---------------------------------------------------------------------------
-# Launch Hermes
-# ---------------------------------------------------------------------------
-if [ ! -d "$SRC_DIR/hermes-agent" ]; then
-    echo "[ERROR] Hermes source not found. Please delete .cache and try again."
-    exit 1
-fi
-
-# ---------------------------------------------------------------------------
-# Synthos Skill Configuration - inject into config.yaml if not present
-# ---------------------------------------------------------------------------
-if [ -f "$HERMES_HOME/config.yaml" ]; then
-    if ! grep -q "$SYNTHOS_CONFIG_TAG" "$HERMES_HOME/config.yaml" 2>/dev/null; then
+ensure_synthos() {
+    if [ ! -f "$PORTABLE_ROOT/Synthos/SKILL.md" ]; then
         echo ""
-        echo "  [Synthos] Configuring Synthos skills ..."
-        cat >> "$HERMES_HOME/config.yaml" << EOF
+        echo "============================================"
+        echo "    Synthos Cognitive Engine"
+        echo "============================================"
+        bash "$PORTABLE_ROOT/scripts/download-synthos.sh" "$PORTABLE_ROOT/Synthos"
+    fi
+    # Synthos Skill Configuration - inject into config.yaml if not present
+    if [ -f "$HERMES_HOME/config.yaml" ]; then
+        if ! grep -q "$SYNTHOS_CONFIG_TAG" "$HERMES_HOME/config.yaml" 2>/dev/null; then
+            echo ""
+            echo "  [Synthos] Configuring Synthos skills ..."
+            cat >> "$HERMES_HOME/config.yaml" << EOF
 
 # $SYNTHOS_CONFIG_TAG
 skills:
   external_dirs:
     - $SYNTHOS_SKILLS
 EOF
+        fi
     fi
-fi
+}
 
-cd "$SRC_DIR/hermes-agent"
+# Prevent Node/npm from writing to host home directory
+export HOME="$PORTABLE_ROOT/.cache/unix-home"
+mkdir -p "$HOME"
 
-# Strip "hermes" from the start of arguments if user typed "launch.sh hermes setup"
-if [ "$1" = "hermes" ] || [ "$1" = "HERMES" ]; then
-    shift
-fi
-
-# If explicit arguments were passed, run Hermes directly (skip menu)
+# ---------------------------------------------------------------------------
+# Direct-argument mode (e.g. ./launch.sh hermes setup): needs full runtime
+# ---------------------------------------------------------------------------
 if [ $# -gt 0 ]; then
+    # Strip "hermes" from the start of arguments if user typed "launch.sh hermes setup"
+    if [ "$1" = "hermes" ] || [ "$1" = "HERMES" ]; then
+        shift
+    fi
+    if [ "$HERMES_READY" != "1" ]; then
+        echo "[INFO] Hermes 运行时未安装，首次使用需下载 ~600MB。"
+        setup_hermes || exit 1
+        setup_hermes_env
+    fi
+    if [ ! -d "$SRC_DIR/hermes-agent" ]; then
+        echo "[ERROR] Hermes source not found. Please delete .cache and try again."
+        exit 1
+    fi
+    ensure_synthos
+    cd "$SRC_DIR/hermes-agent"
     hermes "$@"
     exit 0
 fi
@@ -349,10 +360,16 @@ show_menu() {
 
 menu_opencode() {
     clear
-    # 1. opencode CLI 就绪检查
+    # 0. Synthos 技能（小，按需 clone）
+    ensure_synthos
+    # 1. opencode CLI（不存在则自动下载 ~200MB）
     if [ ! -x "$OPENCODE_CLI" ]; then
-        echo -e "${YELLOW}opencode CLI not found.${RESET}"
-        echo -e "${YELLOW}请先运行 [8] Download Tools 下载工具。${RESET}"
+        echo -e "${YELLOW}opencode CLI 未安装，首次使用自动下载（~200MB，含全部科研工具）。${RESET}"
+        echo -e "${CYAN}正在下载 ...${RESET}"
+        bash "$TOOLS_SETUP_FILE"
+    fi
+    if [ ! -x "$OPENCODE_CLI" ]; then
+        echo -e "${YELLOW}下载失败。请检查网络后重试，或菜单 [8] Download Tools。${RESET}"
         read -p "Press Enter to continue ..."
         show_menu
         return
@@ -405,18 +422,52 @@ EOF
 
 menu_chat() {
     clear
+    # Hermes 运行时按需安装（600MB）— 仅 Hermes 入口需要
+    if [ "$HERMES_READY" != "1" ]; then
+        echo -e "${YELLOW}Hermes 运行时未安装，首次使用需下载 ~600MB。${RESET}"
+        echo -e "${CYAN}（只想快速 AI 对话？菜单 [1] OpenCode 无需此下载，即开即用）${RESET}"
+        setup_hermes || {
+            read -p "Press Enter to continue ..."
+            show_menu
+            return
+        }
+        setup_hermes_env
+    fi
+    if [ ! -d "$SRC_DIR/hermes-agent" ]; then
+        echo "[ERROR] Hermes source not found. Please delete .cache and try again."
+        read -p "Press Enter to continue ..."
+        show_menu
+        return
+    fi
+    ensure_synthos
+    cd "$SRC_DIR/hermes-agent"
     hermes
     show_menu
 }
 
 menu_setup() {
     clear
+    if [ "$HERMES_READY" != "1" ]; then
+        echo -e "${YELLOW}Hermes 运行时未安装，先安装运行时（~600MB）...${RESET}"
+        setup_hermes || {
+            read -p "Press Enter to continue ..."
+            show_menu
+            return
+        }
+        setup_hermes_env
+    fi
     hermes setup
     detect_status
     show_menu
 }
 
 menu_gateway() {
+    if [ "$HERMES_READY" != "1" ]; then
+        echo -e "${YELLOW}Hermes 运行时未安装。先选 [2] Start Hermes Chat 触发安装（~600MB）。${RESET}"
+        read -p "Press Enter to continue ..."
+        show_menu
+        return
+    fi
     if [ "$GATEWAY_STATUS" = "Running (PID $GATEWAY_PID)" ]; then
         hermes gateway stop
         echo ""
@@ -526,6 +577,12 @@ show_advanced() {
 
 adv_doctor() {
     clear
+    if [ "$HERMES_READY" != "1" ]; then
+        echo -e "${YELLOW}Hermes 运行时未安装。先选 [2] Start Hermes Chat 触发安装。${RESET}"
+        read -p "Press Enter to continue ..."
+        show_advanced
+        return
+    fi
     hermes doctor
     read -p "Press Enter to continue ..."
     show_advanced
@@ -546,11 +603,23 @@ adv_logs() {
 
 adv_config() {
     clear
+    if [ "$HERMES_READY" != "1" ]; then
+        echo -e "${YELLOW}Hermes 运行时未安装。先选 [2] Start Hermes Chat 触发安装。${RESET}"
+        read -p "Press Enter to continue ..."
+        show_advanced
+        return
+    fi
     hermes config edit
     show_advanced
 }
 
 adv_restart() {
+    if [ "$HERMES_READY" != "1" ]; then
+        echo -e "${YELLOW}Hermes 运行时未安装。先选 [2] Start Hermes Chat 触发安装。${RESET}"
+        read -p "Press Enter to continue ..."
+        show_advanced
+        return
+    fi
     hermes gateway restart
     echo ""
     echo -e "${BRIGHT_GREEN}Gateway restarted.${RESET}"
@@ -561,6 +630,12 @@ adv_restart() {
 
 adv_update() {
     clear
+    if [ "$HERMES_READY" != "1" ]; then
+        echo -e "${YELLOW}Hermes 运行时未安装。先选 [2] Start Hermes Chat 触发安装。${RESET}"
+        read -p "Press Enter to continue ..."
+        show_advanced
+        return
+    fi
     hermes update
     read -p "Press Enter to continue ..."
     show_advanced

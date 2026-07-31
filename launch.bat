@@ -19,29 +19,38 @@ set "RUNTIME_DIR=%CACHE_DIR%\runtimes\windows-x64"
 set "SRC_DIR=%PORTABLE_ROOT%\src"
 
 REM ---------------------------------------------------------------------------
-REM First-run setup
+REM Runtime readiness — Hermes runtime (~600MB) is downloaded ON DEMAND,
+REM not at launch. OpenCode entry works without it.
 REM ---------------------------------------------------------------------------
-if not exist "%RUNTIME_DIR%\ready.flag" (
+set "HERMES_READY=0"
+if exist "%RUNTIME_DIR%\ready.flag" set "HERMES_READY=1"
+
+REM Jump over subroutine definitions to the main body
+goto :main_body
+
+:setup_hermes
+echo.
+echo ============================================
+echo    Hermes Runtime - First Run Setup
+echo ============================================
+echo  This will download ~600MB of runtime files
+echo  for Windows x64. Please be patient.
+echo ============================================
+echo.
+powershell -ExecutionPolicy Bypass -File "%PORTABLE_ROOT%\scripts\setup-windows.ps1" -Root "%PORTABLE_ROOT%"
+if errorlevel 1 (
     echo.
-    echo ============================================
-    echo    Hermes Portable - First Run Setup
-    echo ============================================
-    echo  This will download ~600MB of runtime files
-    echo  for Windows x64. Please be patient.
-    echo ============================================
-    echo.
-    powershell -ExecutionPolicy Bypass -File "%PORTABLE_ROOT%\scripts\setup-windows.ps1" -Root "%PORTABLE_ROOT%"
-    if errorlevel 1 (
-        echo.
-        echo [ERROR] Setup failed. Please check your internet connection and try again.
-        pause
-        exit /b 1
-    )
+    echo [ERROR] Setup failed. Please check your internet connection and try again.
+    pause
+    exit /b 1
 )
+set "HERMES_READY=1"
+goto :eof
 
 REM ---------------------------------------------------------------------------
-REM Synthos auto-download (if not present)
+REM Synthos clone + config injection (on demand, small)
 REM ---------------------------------------------------------------------------
+:ensure_synthos
 if not exist "%PORTABLE_ROOT%\Synthos\SKILL.md" (
     echo.
     echo ============================================
@@ -49,7 +58,21 @@ if not exist "%PORTABLE_ROOT%\Synthos\SKILL.md" (
     echo ============================================
     call "%PORTABLE_ROOT%\scripts\download-synthos.bat" "%PORTABLE_ROOT%\Synthos"
 )
+if exist "%HERMES_HOME%\config.yaml" (
+    findstr /C:"%SYNTHOS_CONFIG_TAG%" "%HERMES_HOME%\config.yaml" >nul 2>&1
+    if errorlevel 1 (
+        echo.
+        echo  [Synthos] Configuring Synthos skills ...
+        echo.>> "%HERMES_HOME%\config.yaml"
+        echo # %SYNTHOS_CONFIG_TAG% >> "%HERMES_HOME%\config.yaml"
+        echo skills:>> "%HERMES_HOME%\config.yaml"
+        echo   external_dirs:>> "%HERMES_HOME%\config.yaml"
+        echo     - %SYNTHOS_SKILLS%>> "%HERMES_HOME%\config.yaml"
+    )
+)
+goto :eof
 
+:main_body
 REM ---------------------------------------------------------------------------
 REM Environment isolation - keep everything inside the portable folder
 REM ---------------------------------------------------------------------------
@@ -88,40 +111,23 @@ if exist "%VIRTUAL_ENV%\pyvenv.cfg" (
 )
 
 REM ---------------------------------------------------------------------------
-REM Launch Hermes
+REM Direct-argument mode (e.g. launch.bat hermes setup): needs full runtime
 REM ---------------------------------------------------------------------------
-if not exist "%SRC_DIR%\hermes-agent" (
-    echo [ERROR] Hermes source not found. Please delete .cache and try again.
-    pause
-    exit /b 1
-)
-
-REM ---------------------------------------------------------------------------
-REM Synthos Skill Configuration - inject into config.yaml if not present
-REM ---------------------------------------------------------------------------
-if exist "%HERMES_HOME%\config.yaml" (
-    findstr /C:"%SYNTHOS_CONFIG_TAG%" "%HERMES_HOME%\config.yaml" >nul 2>&1
-    if errorlevel 1 (
-        echo.
-        echo  [Synthos] Configuring Synthos skills ...
-        echo.>> "%HERMES_HOME%\config.yaml"
-        echo # %SYNTHOS_CONFIG_TAG% >> "%HERMES_HOME%\config.yaml"
-        echo skills:>> "%HERMES_HOME%\config.yaml"
-        echo   external_dirs:>> "%HERMES_HOME%\config.yaml"
-        echo     - %SYNTHOS_SKILLS%>> "%HERMES_HOME%\config.yaml"
-    )
-)
-
-cd /d "%SRC_DIR%\hermes-agent"
-
-REM Strip "hermes" from the start of arguments if user typed "launch.bat hermes setup"
 set "ARGS=%*"
 if /I "%~1"=="hermes" (
     set "ARGS=%ARGS:~7%"
 )
-
-REM If explicit arguments were passed, run Hermes directly (skip menu)
 if not "%ARGS%"=="" (
+    if "!HERMES_READY!"=="0" (
+        echo %YELLOW%Hermes runtime not installed. Downloading ~600MB ...%RESET%
+        call :setup_hermes
+    )
+    call :ensure_synthos
+    if not exist "%SRC_DIR%\hermes-agent" (
+        echo [ERROR] Hermes source not found. Please delete .cache and try again.
+        exit /b 1
+    )
+    cd /d "%SRC_DIR%\hermes-agent"
     python -c "from hermes_cli.main import main; main()" %ARGS%
     exit /b
 )
@@ -289,14 +295,24 @@ REM Menu Actions
 REM ---------------------------------------------------------------------------
 :menu_opencode
 echo.
-if not exist "%OPENCODE_CLI%" (
-    echo %YELLOW%opencode CLI not found. Please run [8] Download Tools first.%RESET%
-    pause
-    goto :show_menu
-)
 REM Portable HOME: redirect USERPROFILE so opencode never touches the host
 set "USERPROFILE=%PORTABLE_ROOT%\.cache\windows-opencode-home"
 if not exist "%USERPROFILE%" mkdir "%USERPROFILE%"
+
+REM Synthos skills (small, on demand)
+call :ensure_synthos
+
+REM opencode CLI (auto-download on first use, ~200MB)
+if not exist "%OPENCODE_CLI%" (
+    echo %YELLOW%opencode CLI not installed. Auto-downloading tools (~200MB) ...%RESET%
+    if not exist "%TOOLS_DIR%" mkdir "%TOOLS_DIR%"
+    powershell -ExecutionPolicy Bypass -File "%TOOLS_SETUP_FILE%" -ToolsDir "%TOOLS_DIR%"
+)
+if not exist "%OPENCODE_CLI%" (
+    echo %YELLOW%Download failed. Check network or use [8] Download Tools.%RESET%
+    pause
+    goto :show_menu
+)
 
 REM Ensure Local AI proxy (free models) is running
 tasklist /FI "IMAGENAME eq opencode-openai.exe" 2>nul | findstr /I "opencode-openai" >nul
@@ -329,15 +345,36 @@ goto :detect_status
 
 :menu_chat
 echo.
+if "!HERMES_READY!"=="0" (
+    echo %YELLOW%Hermes runtime not installed. Downloading ~600MB ...%RESET%
+    echo %CYAN%(Want fast AI chat? Choose [1] OpenCode - no download needed)%RESET%
+    call :setup_hermes
+)
+call :ensure_synthos
+if not exist "%SRC_DIR%\hermes-agent" (
+    echo [ERROR] Hermes source not found. Please delete .cache and try again.
+    pause
+    goto :show_menu
+)
+cd /d "%SRC_DIR%\hermes-agent"
 python -c "from hermes_cli.main import main; main()"
 goto :show_menu
 
 :menu_setup
 echo.
+if "!HERMES_READY!"=="0" (
+    echo %YELLOW%Hermes runtime not installed. Downloading ~600MB ...%RESET%
+    call :setup_hermes
+)
 python -c "from hermes_cli.main import main; main()" setup
 goto :detect_status
 
 :menu_gateway
+if "!HERMES_READY!"=="0" (
+    echo %YELLOW%Hermes runtime not installed. Choose [2] Start Hermes Chat first.%RESET%
+    pause
+    goto :show_menu
+)
 if "!GATEWAY_STATUS!"=="Running (PID !GATEWAY_PID!)" (
     python -c "from hermes_cli.main import main; main()" gateway stop
     echo.
@@ -419,6 +456,11 @@ goto :show_advanced
 
 :adv_doctor
 echo.
+if "!HERMES_READY!"=="0" (
+    echo %YELLOW%Hermes runtime not installed. Choose [2] Start Hermes Chat first.%RESET%
+    pause
+    goto :show_advanced
+)
 python -c "from hermes_cli.main import main; main()" doctor
 pause
 goto :show_advanced
@@ -437,10 +479,20 @@ goto :show_advanced
 
 :adv_config
 echo.
+if "!HERMES_READY!"=="0" (
+    echo %YELLOW%Hermes runtime not installed. Choose [2] Start Hermes Chat first.%RESET%
+    pause
+    goto :show_advanced
+)
 python -c "from hermes_cli.main import main; main()" config edit
 goto :show_advanced
 
 :adv_restart
+if "!HERMES_READY!"=="0" (
+    echo %YELLOW%Hermes runtime not installed. Choose [2] Start Hermes Chat first.%RESET%
+    pause
+    goto :show_advanced
+)
 python -c "from hermes_cli.main import main; main()" gateway restart
 echo.
 echo %BRIGHT_GREEN%Gateway restarted.%RESET%
@@ -449,6 +501,11 @@ goto :detect_status
 
 :adv_update
 echo.
+if "!HERMES_READY!"=="0" (
+    echo %YELLOW%Hermes runtime not installed. Choose [2] Start Hermes Chat first.%RESET%
+    pause
+    goto :show_advanced
+)
 python -c "from hermes_cli.main import main; main()" update
 pause
 goto :show_advanced
