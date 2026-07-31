@@ -1,10 +1,10 @@
 param([string]$ToolsDir = "$PSScriptRoot")
 
 $tools = @(
-    @{Name="opencode-openai.exe"; Url="https://github.com/yakeworld/opencode-openai/releases/download/v0.1.1/opencode-openai.exe"},
-    @{Name="jabkit.exe";         Url="https://github.com/yakeworld/jabkit-rs/releases/download/v0.1.0/jabkit.exe"},
-    @{Name="doi-fetch.exe";      Url="https://github.com/yakeworld/doi-fetch/releases/download/v0.1.0/doi-fetch.exe"},
-    @{Name="rproxy.exe";         Url="https://github.com/yakeworld/rproxy/releases/download/v0.3.0/rproxy.exe"}
+    @{Name="opencode-openai.exe"; Url="https://github.com/yakeworld/opencode-openai/releases/latest/download/opencode-openai.exe"},
+    @{Name="jabkit.exe";         Url="https://github.com/yakeworld/jabkit-rs/releases/latest/download/jabkit.exe"},
+    @{Name="doi-fetch.exe";      Url="https://github.com/yakeworld/doi-fetch/releases/latest/download/doi-fetch.exe"},
+    @{Name="rproxy.exe";         Url="https://github.com/yakeworld/rproxy/releases/latest/download/rproxy.exe"}
 )
 
 foreach ($t in $tools) {
