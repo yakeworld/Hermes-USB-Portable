@@ -393,6 +393,8 @@ menu_opencode() {
         cat > "$OPENCODE_CLI_DIR/opencode.json" << EOF
 {
   "\$schema": "https://opencode.ai/config.json",
+  "model": "local-ai/deepseek-v4-flash-free",
+  "small_model": "local-ai/deepseek-v4-flash-free",
   "provider": {
     "local-ai": {
       "npm": "@ai-sdk/openai-compatible",
@@ -404,7 +406,6 @@ menu_opencode() {
       }
     }
   },
-  "model": "local-ai/deepseek-v4-flash-free",
   "permission": { "read": "allow", "edit": "ask", "bash": "ask", "skill": "allow" }
 }
 EOF

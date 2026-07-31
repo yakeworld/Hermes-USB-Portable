@@ -295,9 +295,17 @@ REM Menu Actions
 REM ---------------------------------------------------------------------------
 :menu_opencode
 echo.
-REM Portable HOME: redirect USERPROFILE so opencode never touches the host
+REM Portable HOME: redirect USERPROFILE + XDG dirs so opencode never touches the host
+REM (XDG scheme absorbed from USB opencode-portable — opencode honors XDG_CONFIG_HOME
+REM  / XDG_DATA_HOME natively; USERPROFILE covers ~/.agents/skills homedir lookup)
 set "USERPROFILE=%PORTABLE_ROOT%\.cache\windows-opencode-home"
 if not exist "%USERPROFILE%" mkdir "%USERPROFILE%"
+set "XDG_CONFIG_HOME=%PORTABLE_ROOT%\data\opencode-config"
+set "XDG_DATA_HOME=%PORTABLE_ROOT%\data\opencode"
+set "XDG_STATE_HOME=%PORTABLE_ROOT%\.cache\opencode-state"
+set "XDG_CACHE_HOME=%PORTABLE_ROOT%\.cache\opencode-cache"
+if not exist "%XDG_STATE_HOME%" mkdir "%XDG_STATE_HOME%"
+if not exist "%XDG_CACHE_HOME%" mkdir "%XDG_CACHE_HOME%"
 
 REM Synthos skills (small, on demand)
 call :ensure_synthos
@@ -322,17 +330,18 @@ if errorlevel 1 (
     timeout /t 3 /nobreak >nul
 )
 
-REM Link Synthos skills (dual paths: homedir + appdata, covers opencode's lookup)
+REM Link Synthos skills (dual paths: homedir + XDG config, covers opencode's lookup)
 if exist "%SYNTHOS_SKILLS%" (
     powershell -ExecutionPolicy Bypass -File "%PORTABLE_ROOT%\scripts\link-opencode-skills.ps1" -Src "%SYNTHOS_SKILLS%" -Dest "%USERPROFILE%\.agents\skills"
-    powershell -ExecutionPolicy Bypass -File "%PORTABLE_ROOT%\scripts\link-opencode-skills.ps1" -Src "%SYNTHOS_SKILLS%" -Dest "%APPDATA%\opencode\skills"
+    powershell -ExecutionPolicy Bypass -File "%PORTABLE_ROOT%\scripts\link-opencode-skills.ps1" -Src "%SYNTHOS_SKILLS%" -Dest "%XDG_CONFIG_HOME%\opencode\skills"
 )
 
 REM Generate portable opencode.json (points to local free-model proxy)
-set "OC_CONFIG_DIR=%USERPROFILE%\.config\opencode"
+set "OC_CONFIG_DIR=%XDG_CONFIG_HOME%\opencode"
 if not exist "%OC_CONFIG_DIR%" mkdir "%OC_CONFIG_DIR%"
-if not exist "%OC_CONFIG_DIR%\opencode.json" (
-    powershell -Command "$cfg = '{\"$schema\":\"https://opencode.ai/config.json\",\"provider\":{\"local-ai\":{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Local AI (Free)\",\"options\":{\"baseURL\":\"http://127.0.0.1:8787/v1\",\"apiKey\":\"public\"},\"models\":{\"deepseek-v4-flash-free\":{\"name\":\"DeepSeek V4 Flash (Free)\",\"tools\":true},\"big-pickle\":{\"name\":\"Big Pickle (Free)\",\"tools\":true}}}},\"model\":\"local-ai/deepseek-v4-flash-free\",\"permission\":{\"read\":\"allow\",\"edit\":\"ask\",\"bash\":\"ask\",\"skill\":\"allow\"}}'; Set-Content -Path '%OC_CONFIG_DIR%\opencode.json' -Value $cfg -Encoding UTF8"
+set "OPENCODE_CONFIG=%OC_CONFIG_DIR%\opencode.json"
+if not exist "%OPENCODE_CONFIG%" (
+    powershell -Command "$cfg = '{\"$schema\":\"https://opencode.ai/config.json\",\"model\":\"local-ai/deepseek-v4-flash-free\",\"small_model\":\"local-ai/deepseek-v4-flash-free\",\"provider\":{\"local-ai\":{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Local AI (Free)\",\"options\":{\"baseURL\":\"http://127.0.0.1:8787/v1\",\"apiKey\":\"public\"},\"models\":{\"deepseek-v4-flash-free\":{\"name\":\"DeepSeek V4 Flash (Free)\",\"tools\":true},\"big-pickle\":{\"name\":\"Big Pickle (Free)\",\"tools\":true}}}},\"permission\":{\"read\":\"allow\",\"edit\":\"ask\",\"bash\":\"ask\",\"skill\":\"allow\"}}'; Set-Content -Path '%OPENCODE_CONFIG%' -Value $cfg -Encoding UTF8"
     echo %BRIGHT_GREEN%  opencode config created (free model, no API key).%RESET%
 )
 

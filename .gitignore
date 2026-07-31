@@ -18,4 +18,5 @@ tools/macos-arm64/*
 !tools/linux-x64/download-tools.sh
 !tools/windows-x64/download-tools.ps1
 !tools/macos-x64/download-tools.sh
+tools/oh-my-openagent/
 !tools/macos-arm64/download-tools.sh

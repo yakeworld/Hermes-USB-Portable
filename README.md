@@ -81,6 +81,19 @@ chmod +x launch.sh && ./launch.sh
 用 task-router 技能分析："检索 3D nystagmus 文献"
 ```
 
+### 可选插件：oh-my-openagent（多 Agent 编排）
+
+需要多 agent 并行协作时（主 agent 分派子 agent），可安装 omo 插件：
+
+```bash
+# Linux / macOS
+./scripts/install-omo.sh
+# Windows
+scripts\install-omo.bat
+```
+
+安装后重启 opencode，`/agents` 查看编排能力。omo 源码下载到 `tools/oh-my-openagent/`（不入库）。
+
 ### Synthos 技能调用
 
 在 Hermes 对话中：
