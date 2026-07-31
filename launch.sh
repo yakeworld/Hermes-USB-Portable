@@ -142,6 +142,8 @@ export NPM_CONFIG_PREFIX="$RUNTIME_DIR/node"
 TOOLS_DIR="$PORTABLE_ROOT/tools/${PLATFORM}-${ARCH}"
 TOOLS_SETUP_FILE="$PORTABLE_ROOT/tools/${PLATFORM}-${ARCH}/download-tools.sh"
 OPENCODE_EXE="$TOOLS_DIR/opencode-openai"
+OPENCODE_CLI="$TOOLS_DIR/opencode-cli/opencode"
+OPENCODE_CLI_DIR="$PORTABLE_ROOT/.cache/unix-home/.config/opencode"
 
 # Synthos
 SYNTHOS_SKILLS="$PORTABLE_ROOT/Synthos/skills"
@@ -310,36 +312,95 @@ show_menu() {
     echo ""
     echo -e "${BRIGHT_CYAN}----------------------------------------------------------------${RESET}"
     echo ""
-    echo -e "  ${BRIGHT_YELLOW}[1]${RESET}  ${WHITE}Start Hermes Chat${RESET}"
-    echo -e "  ${BRIGHT_YELLOW}[2]${RESET}  ${WHITE}Setup / Reconfigure Hermes${RESET}"
+    echo -e "  ${BRIGHT_YELLOW}[1]${RESET}  ${WHITE}Start OpenCode Chat${RESET}  ${GREEN}(默认，回车直达)${RESET}"
+    echo -e "  ${BRIGHT_YELLOW}[2]${RESET}  ${WHITE}Start Hermes Chat${RESET}"
+    echo -e "  ${BRIGHT_YELLOW}[3]${RESET}  ${WHITE}Setup / Reconfigure Hermes${RESET}"
     if [ "$GATEWAY_STATUS" = "Running (PID $GATEWAY_PID)" ]; then
-        echo -e "  ${BRIGHT_YELLOW}[3]${RESET}  ${WHITE}Stop Gateway${RESET}  ${RED}[live]${RESET}"
+        echo -e "  ${BRIGHT_YELLOW}[4]${RESET}  ${WHITE}Stop Gateway${RESET}  ${RED}[live]${RESET}"
     else
-        echo -e "  ${BRIGHT_YELLOW}[3]${RESET}  ${WHITE}Start Gateway${RESET}"
+        echo -e "  ${BRIGHT_YELLOW}[4]${RESET}  ${WHITE}Start Gateway${RESET}"
     fi
-    echo -e "  ${BRIGHT_YELLOW}[4]${RESET}  ${WHITE}Advanced Options${RESET}  ${GRAY}-->${RESET}"
+    echo -e "  ${BRIGHT_YELLOW}[5]${RESET}  ${WHITE}Advanced Options${RESET}  ${GRAY}-->${RESET}"
+    echo -e "  ${BRIGHT_YELLOW}[6]${RESET}  ${GRAY}Exit${RESET}"
     if [ "$LOCAL_AI_STATUS" = "Running" ]; then
-        echo -e "  ${BRIGHT_YELLOW}[6]${RESET}  ${WHITE}Stop Local AI${RESET}      ${RED}[live]${RESET}"
+        echo -e "  ${BRIGHT_YELLOW}[7]${RESET}  ${WHITE}Stop Local AI${RESET}      ${RED}[live]${RESET}"
     else
-        echo -e "  ${BRIGHT_YELLOW}[6]${RESET}  ${WHITE}Start Local AI${RESET}"
+        echo -e "  ${BRIGHT_YELLOW}[7]${RESET}  ${WHITE}Start Local AI${RESET}"
     fi
-    echo -e "  ${BRIGHT_YELLOW}[7]${RESET}  ${WHITE}Download Tools${RESET}"
-    echo -e "  ${BRIGHT_YELLOW}[5]${RESET}  ${GRAY}Exit${RESET}"
+    echo -e "  ${BRIGHT_YELLOW}[8]${RESET}  ${WHITE}Download Tools${RESET}"
     echo ""
     echo -e "${BRIGHT_CYAN}----------------------------------------------------------------${RESET}"
     echo ""
-    read -p "$(echo -e "${BRIGHT_CYAN}Select option: ${RESET}")" choice
+    read -p "$(echo -e "${BRIGHT_CYAN}Select option (Enter=1): ${RESET}")" choice
+    choice="${choice:-1}"
 
     case "$choice" in
-        1) menu_chat ;;
-        2) menu_setup ;;
-        3) menu_gateway ;;
-        4) show_advanced ;;
-        5) menu_exit ;;
-        6) menu_local_ai ;;
-        7) menu_download_tools ;;
+        1) menu_opencode ;;
+        2) menu_chat ;;
+        3) menu_setup ;;
+        4) menu_gateway ;;
+        5) show_advanced ;;
+        6) menu_exit ;;
+        7) menu_local_ai ;;
+        8) menu_download_tools ;;
         *) show_menu ;;
     esac
+}
+
+menu_opencode() {
+    clear
+    # 1. opencode CLI 就绪检查
+    if [ ! -x "$OPENCODE_CLI" ]; then
+        echo -e "${YELLOW}opencode CLI not found.${RESET}"
+        echo -e "${YELLOW}请先运行 [8] Download Tools 下载工具。${RESET}"
+        read -p "Press Enter to continue ..."
+        show_menu
+        return
+    fi
+    # 2. 确保 Local AI 代理（免费模型）运行
+    if ! pgrep -f "opencode-openai" >/dev/null 2>&1; then
+        echo -e "${CYAN}Starting Local AI (免费模型代理) ...${RESET}"
+        "$OPENCODE_EXE" --port 8787 --api-key public &
+        sleep 3
+        if ! pgrep -f "opencode-openai" >/dev/null 2>&1; then
+            echo -e "${YELLOW}Local AI 启动失败。检查 tools/ 目录是否已下载。${RESET}"
+        fi
+    fi
+    # 3. 技能链接（Synthos 156 技能 -> opencode 发现路径）
+    if [ -d "$SYNTHOS_SKILLS" ]; then
+        bash "$PORTABLE_ROOT/scripts/link-opencode-skills.sh" "$SYNTHOS_SKILLS" "$HOME/.agents/skills"
+    fi
+    # 4. 生成便携 opencode.json（指向本地免费模型）
+    mkdir -p "$OPENCODE_CLI_DIR"
+    if [ ! -f "$OPENCODE_CLI_DIR/opencode.json" ]; then
+        cat > "$OPENCODE_CLI_DIR/opencode.json" << EOF
+{
+  "\$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "local-ai": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Local AI (Free)",
+      "options": { "baseURL": "http://127.0.0.1:8787/v1", "apiKey": "public" },
+      "models": {
+        "deepseek-v4-flash-free": { "name": "DeepSeek V4 Flash (Free)", "tools": true },
+        "big-pickle": { "name": "Big Pickle (Free)", "tools": true }
+      }
+    }
+  },
+  "model": "local-ai/deepseek-v4-flash-free",
+  "permission": { "read": "allow", "edit": "ask", "bash": "ask", "skill": "allow" }
+}
+EOF
+        echo -e "${BRIGHT_GREEN}  opencode 配置已生成（免费模型，无需 API Key）。${RESET}"
+    fi
+    # 5. 启动 OpenCode TUI
+    echo -e "${CYAN}启动 OpenCode ...（/exit 或 Ctrl+C 返回菜单）${RESET}"
+    cd "$PORTABLE_ROOT"
+    "$OPENCODE_CLI"
+    echo ""
+    read -p "Press Enter to return to menu ..."
+    detect_status
+    show_menu
 }
 
 menu_chat() {

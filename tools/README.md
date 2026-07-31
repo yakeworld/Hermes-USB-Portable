@@ -6,10 +6,21 @@ Standalone tools that extend Hermes with local AI, literature search, PDF downlo
 
 | Tool | Description | Source | Size |
 |:-----|:------------|:-------|:-----|
+| `opencode-cli/opencode` | OpenCode AI agent (default entry, Go single binary, MIT) | [opencode-ai/opencode](https://github.com/opencode-ai/opencode) | ~170MB |
 | `opencode-openai` | Local OpenAI-compatible API proxy → uses free OpenCode Zen models | [yakeworld/opencode-openai](https://github.com/yakeworld/opencode-openai) | ~10MB |
 | `jabkit(-rs)` | Multi-source academic literature search (25 providers) | [yakeworld/jabkit-rs](https://github.com/yakeworld/jabkit-rs) | ~3.5MB |
 | `doi-fetch` | PDF download with 4-tier cascade fallback | [yakeworld/doi-fetch](https://github.com/yakeworld/doi-fetch) | ~11MB |
 | `rproxy` | HTTP/SOCKS5 proxy rotation for anti-crawler bypass | [yakeworld/rproxy](https://github.com/yakeworld/rproxy) | ~9MB |
+
+## OpenCode CLI
+
+`opencode-cli/opencode` is the default chat entry point (menu [1]). It is downloaded
+from the npm platform package (`opencode-<platform>@<version>`) which always carries
+the latest release with native skill support. The launcher:
+
+1. Starts the Local AI proxy (free models) if not running
+2. Links all 156 Synthos skills into opencode's skill discovery path (`~/.agents/skills/`)
+3. Writes a portable `opencode.json` pointing at `http://127.0.0.1:8787/v1`
 
 ## First Download
 

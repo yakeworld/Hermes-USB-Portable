@@ -57,6 +57,7 @@ set "VIRTUAL_ENV=%RUNTIME_DIR%\venv"
 set "TOOLS_DIR=%PORTABLE_ROOT%\tools\windows-x64"
 set "TOOLS_SETUP_FILE=%TOOLS_DIR%\download-tools.ps1"
 set "OPENCODE_EXE=%TOOLS_DIR%\opencode-openai.exe"
+set "OPENCODE_CLI=%TOOLS_DIR%\opencode-cli\opencode.exe"
 set "SYNTHOS_SKILLS=%PORTABLE_ROOT%\Synthos\skills"
 set "SYNTHOS_CONFIG_TAG=###SYNTHOS_SKILLS_CONFIG###"
 set "PATH=%TOOLS_DIR%;%VIRTUAL_ENV%\Scripts;%RUNTIME_DIR%\python;%RUNTIME_DIR%\python\Scripts;%RUNTIME_DIR%\node;%RUNTIME_DIR%\uv;%RUNTIME_DIR%\bin;%PATH%"
@@ -251,38 +252,81 @@ echo  %DIM%Version%RESET%  %GRAY%v!HERMES_VERSION!%RESET%
 echo.
 echo %BRIGHT_CYAN%----------------------------------------------------------------%RESET%
 echo.
-echo  %BRIGHT_YELLOW%[1]%RESET%  %WHITE%Start Hermes Chat%RESET%
-echo  %BRIGHT_YELLOW%[2]%RESET%  %WHITE%Setup / Reconfigure Hermes%RESET%
+echo  %BRIGHT_YELLOW%[1]%RESET%  %WHITE%Start OpenCode Chat%RESET%  %GREEN%(default, Enter)%RESET%
+echo  %BRIGHT_YELLOW%[2]%RESET%  %WHITE%Start Hermes Chat%RESET%
+echo  %BRIGHT_YELLOW%[3]%RESET%  %WHITE%Setup / Reconfigure Hermes%RESET%
 if "!GATEWAY_STATUS!"=="Running (PID !GATEWAY_PID!)" (
-    echo  %BRIGHT_YELLOW%[3]%RESET%  %WHITE%Stop Gateway%RESET%  %RED%[live]%RESET%
+    echo  %BRIGHT_YELLOW%[4]%RESET%  %WHITE%Stop Gateway%RESET%  %RED%[live]%RESET%
 ) else (
-    echo  %BRIGHT_YELLOW%[3]%RESET%  %WHITE%Start Gateway%RESET%
+    echo  %BRIGHT_YELLOW%[4]%RESET%  %WHITE%Start Gateway%RESET%
 )
-echo  %BRIGHT_YELLOW%[4]%RESET%  %WHITE%Advanced Options%RESET%  %GRAY%--^>%RESET%
+echo  %BRIGHT_YELLOW%[5]%RESET%  %WHITE%Advanced Options%RESET%  %GRAY%--^>%RESET%
+echo  %BRIGHT_YELLOW%[6]%RESET%  %GRAY%Exit%RESET%
 if "!LOCAL_AI_STATUS!"=="Running" (
-    echo  %BRIGHT_YELLOW%[6]%RESET%  %WHITE%Stop Local AI%RESET%      %RED%[live]%RESET%
+    echo  %BRIGHT_YELLOW%[7]%RESET%  %WHITE%Stop Local AI%RESET%      %RED%[live]%RESET%
 ) else (
-    echo  %BRIGHT_YELLOW%[6]%RESET%  %WHITE%Start Local AI%RESET%
+    echo  %BRIGHT_YELLOW%[7]%RESET%  %WHITE%Start Local AI%RESET%
 )
-echo  %BRIGHT_YELLOW%[7]%RESET%  %WHITE%Download Tools%RESET%
-echo  %BRIGHT_YELLOW%[5]%RESET%  %GRAY%Exit%RESET%
+echo  %BRIGHT_YELLOW%[8]%RESET%  %WHITE%Download Tools%RESET%
 echo.
 echo %BRIGHT_CYAN%----------------------------------------------------------------%RESET%
 echo.
+set /p "choice=%BRIGHT_CYAN%Select option (Enter=1): %RESET%"
+if "!choice!"=="" set "choice=1"
 
-echo %BRIGHT_CYAN%Select option:%RESET% & choice /C 1234567 /N
-if errorlevel 7 goto :menu_download_tools
-if errorlevel 6 goto :menu_local_ai
-if errorlevel 5 goto :menu_exit
-if errorlevel 4 goto :show_advanced
-if errorlevel 3 goto :menu_gateway
-if errorlevel 2 goto :menu_setup
-if errorlevel 1 goto :menu_chat
+if "!choice!"=="1" goto :menu_opencode
+if "!choice!"=="2" goto :menu_chat
+if "!choice!"=="3" goto :menu_setup
+if "!choice!"=="4" goto :menu_gateway
+if "!choice!"=="5" goto :show_advanced
+if "!choice!"=="6" goto :menu_exit
+if "!choice!"=="7" goto :menu_local_ai
+if "!choice!"=="8" goto :menu_download_tools
 goto :show_menu
 
 REM ---------------------------------------------------------------------------
 REM Menu Actions
 REM ---------------------------------------------------------------------------
+:menu_opencode
+echo.
+if not exist "%OPENCODE_CLI%" (
+    echo %YELLOW%opencode CLI not found. Please run [8] Download Tools first.%RESET%
+    pause
+    goto :show_menu
+)
+REM Portable HOME: redirect USERPROFILE so opencode never touches the host
+set "USERPROFILE=%PORTABLE_ROOT%\.cache\windows-opencode-home"
+if not exist "%USERPROFILE%" mkdir "%USERPROFILE%"
+
+REM Ensure Local AI proxy (free models) is running
+tasklist /FI "IMAGENAME eq opencode-openai.exe" 2>nul | findstr /I "opencode-openai" >nul
+if errorlevel 1 (
+    echo %CYAN%Starting Local AI (free model proxy) ...%RESET%
+    start "" "%OPENCODE_EXE%" --port 8787 --api-key public
+    timeout /t 3 /nobreak >nul
+)
+
+REM Link Synthos skills (dual paths: homedir + appdata, covers opencode's lookup)
+if exist "%SYNTHOS_SKILLS%" (
+    powershell -ExecutionPolicy Bypass -File "%PORTABLE_ROOT%\scripts\link-opencode-skills.ps1" -Src "%SYNTHOS_SKILLS%" -Dest "%USERPROFILE%\.agents\skills"
+    powershell -ExecutionPolicy Bypass -File "%PORTABLE_ROOT%\scripts\link-opencode-skills.ps1" -Src "%SYNTHOS_SKILLS%" -Dest "%APPDATA%\opencode\skills"
+)
+
+REM Generate portable opencode.json (points to local free-model proxy)
+set "OC_CONFIG_DIR=%USERPROFILE%\.config\opencode"
+if not exist "%OC_CONFIG_DIR%" mkdir "%OC_CONFIG_DIR%"
+if not exist "%OC_CONFIG_DIR%\opencode.json" (
+    powershell -Command "$cfg = '{\"$schema\":\"https://opencode.ai/config.json\",\"provider\":{\"local-ai\":{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Local AI (Free)\",\"options\":{\"baseURL\":\"http://127.0.0.1:8787/v1\",\"apiKey\":\"public\"},\"models\":{\"deepseek-v4-flash-free\":{\"name\":\"DeepSeek V4 Flash (Free)\",\"tools\":true},\"big-pickle\":{\"name\":\"Big Pickle (Free)\",\"tools\":true}}}},\"model\":\"local-ai/deepseek-v4-flash-free\",\"permission\":{\"read\":\"allow\",\"edit\":\"ask\",\"bash\":\"ask\",\"skill\":\"allow\"}}'; Set-Content -Path '%OC_CONFIG_DIR%\opencode.json' -Value $cfg -Encoding UTF8"
+    echo %BRIGHT_GREEN%  opencode config created (free model, no API key).%RESET%
+)
+
+REM Launch OpenCode TUI (foreground; /exit or Ctrl+C returns)
+cd /d "%PORTABLE_ROOT%"
+echo %CYAN%Starting OpenCode ... (/exit or Ctrl+C to return to menu)%RESET%
+"%OPENCODE_CLI%"
+pause
+goto :detect_status
+
 :menu_chat
 echo.
 python -c "from hermes_cli.main import main; main()"

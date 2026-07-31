@@ -19,6 +19,7 @@
 ## ✨ 核心特性
 
 *    **全套科研管线** — 文献检索（25 数据源）→ PDF 下载 → 知识提取 → 论文写作 → 质量闸门，全流程闭环。
+*    **OpenCode 原生入口** — 内置 [OpenCode](https://github.com/opencode-ai/opencode)（MIT，160K+ stars）作为默认启动入口，156 个 Synthos 技能自动链接，即开即用。
 *    **本地 AI** — 内置 `opencode-openai`，使用 OpenCode Zen 免费模型（`deepseek-v4-flash-free`），**无需 API Key**，菜单一键启动 + 自动配置。
 *    **Synthos 认知引擎** — 156 个技能覆盖：知识获取、质量评估、研究空白分析、假说生成、论证表达。首次运行自动克隆。
 *    **零依赖** — 目标电脑无需 Python、Node.js、包管理器。运行时自动下载便携版。
@@ -31,6 +32,7 @@
 
 | 组件 | 说明 | 来源 |
 |:-----|:------|:------|
+| **OpenCode** | AI 编码 Agent 默认入口（MIT，Go 单二进制） | [opencode-ai/opencode](https://github.com/opencode-ai/opencode) |
 | **Hermes Agent** | AI 代理核心（工具调用、记忆、技能系统） | [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) |
 | **Synthos** | 156 个科研技能：文献检索/知识提取/质量闸门/假说生成等 | [yakeworld/Synthos](https://github.com/yakeworld/Synthos) |
 | **opencode-openai** | 本地 AI 代理，免费模型，零 API Key | [yakeworld/opencode-openai](https://github.com/yakeworld/opencode-openai) |
@@ -54,9 +56,23 @@ chmod +x launch.sh && ./launch.sh
 
 启动后菜单操作：
 ```
-[7] Download Tools    → 下载 opencode-openai / jabkit / doi-fetch / rproxy
-[6] Start Local AI    → 启动本地 AI（自动写入 config.yaml）
-[1] Start Hermes Chat → 开始对话，Synthos 技能自动可用
+[1] Start OpenCode Chat → OpenCode 默认入口（回车直达），156 技能自动可用
+[2] Start Hermes Chat   → Hermes 对话，Synthos 技能自动可用
+[7] Start Local AI      → 启动本地 AI（自动配置）
+[8] Download Tools      → 下载 opencode CLI / opencode-openai / jabkit / doi-fetch / rproxy
+```
+
+### OpenCode 入口
+
+默认启动项（菜单 [1]，回车直达）。首次启动自动完成：
+1. 拉起本地 AI 代理（免费模型 `deepseek-v4-flash-free`，无需 API Key）
+2. 将 156 个 Synthos 技能链接到 opencode 技能目录（`~/.agents/skills/`，仅便携目录内，不碰宿主）
+3. 生成 `opencode.json`（指向 `127.0.0.1:8787` 本地代理）
+
+在 OpenCode 对话中直接使用技能：
+```
+请加载 quality-gate 技能，对 outputs/papers/xxx 运行质量检查
+用 task-router 技能分析："检索 3D nystagmus 文献"
 ```
 
 ### Synthos 技能调用
@@ -149,10 +165,11 @@ synthos-portable/
 
 ## 📝 Credits
 
+*   **[OpenCode](https://github.com/opencode-ai/opencode)** — AI coding agent (MIT, default entry point)
 *   **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** — AI agent core by [Nous Research](https://github.com/NousResearch)
 *   **[Synthos](https://github.com/yakeworld/Synthos)** — Cognitive engine for automated research (156 skills)
 *   **[opencode-openai](https://github.com/yakeworld/opencode-openai)** — Local AI proxy (OpenCode Zen → OpenAI API)
-*   **[OpenCode](https://opencode.ai)** — Free model tier for AI coding
+*   **[OpenCode Zen](https://opencode.ai/zen)** — Free model tier for AI coding
 *   **[jabkit-rs](https://github.com/yakeworld/jabkit-rs)** — Multi-source literature search (25 providers)
 *   **[doi-fetch](https://github.com/yakeworld/doi-fetch)** — PDF download with 4-tier cascade
 *   **[rproxy](https://github.com/yakeworld/rproxy)** — Proxy rotation for anti-crawler bypass
